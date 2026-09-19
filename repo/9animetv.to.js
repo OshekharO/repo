@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         9Anime
-// @version      v0.0.3
+// @version      v0.0.4
 // @author       appdevelpo
 // @lang         en
 // @license      MIT
@@ -233,25 +233,32 @@ export default class extends Extension {
       });
       const encrypted_res_data = JSON.parse(JSON.stringify(encrypted_res));
       
-      this.subs=encrypted_res_data.tracks.map((element) => {
-        return{
-          title:element.label,
-          url:element.file}
-      })
+      this.subs = (encrypted_res_data.tracks || []).map((element) => {
+        return {
+          title: element.label || element.kind,
+          url: element.file
+        };
+      });
       let m3u8_link = "";
       const isEncrypt = encrypted_res_data["encrypted"];
       if(isEncrypt){
-        const key =await this.start(encrypted_res_data.sources);
-      
+        const key = await this.start(encrypted_res_data.sources);
         const decryptedVal = CryptoJS.AES.decrypt(key[1], key[0]).toString(CryptoJS.enc.Utf8);
-        
-        m3u8_link = decryptedVal.match(/https:\/\/.+m3u8/)[0]
+        m3u8_link = decryptedVal.match(/https:\/\/.+m3u8/)[0];
       }else{
-        m3u8_link = encrypted_res_data.sources
+        if (Array.isArray(encrypted_res_data.sources)) {
+          m3u8_link = encrypted_res_data.sources[0].file || encrypted_res_data.sources[0].url;
+        } else if (typeof encrypted_res_data.sources === "string") {
+          const match = encrypted_res_data.sources.match(/https:\/\/.+m3u8/);
+          m3u8_link = match ? match[0] : encrypted_res_data.sources;
+        } else if (encrypted_res_data.sources && encrypted_res_data.sources.file) {
+          m3u8_link = encrypted_res_data.sources.file;
+        } else {
+          m3u8_link = JSON.stringify(encrypted_res_data.sources).match(/https:\/\/.+?m3u8/)[0];
+        }
       }
       
-      
-      return m3u8_link
+      return m3u8_link;
     }
   
     async watch(url) {
