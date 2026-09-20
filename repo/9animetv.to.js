@@ -58,7 +58,7 @@ export default class extends Extension {
       }
       
        const res = await this.request(search_str);
-       const bsxList = res.match(/flw-item item-qtip[\s\S]+?"clearfix"/g);
+       const bsxList = res.match(/flw-item item-qtip[\s\S]+?"clearfix"/g) || [];
        const videos = [];
        bsxList.forEach((element) => {
            const url = element.match(/href="(.+?)"/)[1];
@@ -160,7 +160,7 @@ export default class extends Extension {
     async latest(page) {
       const res = await this.request(`/filter?keyword=&type=1,2,3,4,5,6&status=all&genre=&season=&language=&year=&sort=all&page=${page}`);
       await this.get_filter(res);
-      const bsxList = res.match(/flw-item item-qtip[\s\S]+?"clearfix"/g);
+      const bsxList = res.match(/flw-item item-qtip[\s\S]+?"clearfix"/g) || [];
       const videos = [];
       bsxList.forEach((element) => {
           const url = element.match(/href="(.+?)"/)[1];
@@ -189,7 +189,7 @@ export default class extends Extension {
       const res = await this.request(`/ajax/episode/list/${video_id}`);
       const res_html = JSON.parse(JSON.stringify(res)).html;
       // const ep_title = res_html.match(/title/)
-      const res_html_area = res_html.match(/<a[\s\S]+?<\/a>/g)
+      const res_html_area = res_html.match(/<a[\s\S]+?<\/a>/g) || []
       const ep = res_html_area.map((element) => {
           return{
               name: "Ep "+element.match(/data-number="(.+?)"/)[1]+" "+element.match(/title="(.+?)"/)[1],
@@ -267,7 +267,7 @@ export default class extends Extension {
       const episode_res_html = JSON.parse(JSON.stringify(episode_res)).html;
       // 
       
-      const episode_server_list = episode_res_html.match(/data-type[\s\S]+?"btn">\w+/g)
+      const episode_server_list = episode_res_html.match(/data-type[\s\S]+?"btn">\w+/g) || []
       
       for(const element of episode_server_list){
           if(element.includes(options[1])&&element.includes(options[2])){
@@ -282,15 +282,20 @@ export default class extends Extension {
               }
           }
       }
-      const server_id = episode_server_list[0].match(/data-id="(.+?)"/)[1]
-      
-      const m3u8_link = await this.anime9(server_id)
-      
+      if (episode_server_list.length > 0) {
+        const server_id = episode_server_list[0].match(/data-id="(.+?)"/)[1];
+        const m3u8_link = await this.anime9(server_id);
+        return {
+            type:"hls",
+            url:m3u8_link,
+            subtitles:this.subs || []
+        };
+      }
       return {
           type:"hls",
-          url:m3u8_link,//auto
-          subtitles:this.subs
-      }
+          url:"",
+          subtitles:this.subs || []
+      };
       
     }
     async anime9(server_id){
