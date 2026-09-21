@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         Kisskh
-// @version      v0.0.3
+// @version      v0.0.4
 // @author       OshekharO
 // @lang         all
 // @license      MIT
@@ -33,14 +33,15 @@ export default class extends Extension {
   
     async detail(url) {
       const res = await this.request(`/api/DramaList/Drama/${url}?isq=true`);
+      const episodes = Array.isArray(res?.episodes) ? [...res.episodes].reverse() : [];
       return {
-        title: res.title,
-        cover: res.thumbnail,
-        desc: res.description,
+        title: res?.title || "",
+        cover: res?.thumbnail || "",
+        desc: res?.description || "",
         episodes: [
           {
             title: "Directory",
-            urls: res.episodes.reverse().map((item) => ({
+            urls: episodes.map((item) => ({
               name: `Episode ${item.number}`,
               url: item.id.toString(),
             })),
@@ -54,10 +55,11 @@ export default class extends Extension {
         `/api/DramaList/Episode/${url}.png?err=false&ts=&time=`
       );
       const subRes = await this.request(`/api/Sub/${url}`);
+      const subtitles = Array.isArray(subRes) ? subRes : [];
       return {
         type: "hls",
-        url: res.Video,
-        subtitles: subRes.map((item) => ({
+        url: res?.Video,
+        subtitles: subtitles.map((item) => ({
           title: item.label,
           url: item.src,
           language: item.land,
@@ -65,4 +67,3 @@ export default class extends Extension {
       };
     }
   }
-  
