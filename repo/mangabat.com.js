@@ -184,20 +184,38 @@ export default class extends Extension {
         });
 
         const idx = res.indexOf("container-chapter-reader");
-        let containerContent = idx !== -1 ? res.slice(idx) : res;
-        const commentIdx = containerContent.search(/<div[^>]*class=['\"][^'\"]*(?:comment|footer|panel-category)/i);
-        if (commentIdx !== -1) {
-            containerContent = containerContent.slice(0, commentIdx);
-        }
+        const searchBlock = idx !== -1 ? res.slice(idx) : res;
 
-        const imgMatches = [...containerContent.matchAll(/<img[^>]*src=['\"]([^'\"]+)['\"]/gi)];
-        const urls = imgMatches
-            .map((m) => {
-                let src = (m[1] || "").trim();
-                if (src && src.startsWith("/")) src = baseUrl + src;
-                return src;
-            })
-            .filter((src) => src && !src.includes("logo") && !src.includes("banner") && !src.includes("favicon") && !src.includes("loadingimg") && !src.includes("default") && !src.includes("avatar"));
+        const imgMatches = [...searchBlock.matchAll(/<img[^>]+src=['\"]([^'\"]+)['\"]/gi)];
+        const urls = [];
+        const seen = new Set();
+
+        for (const m of imgMatches) {
+            let src = (m[1] || "").trim();
+            if (!src || src === "#") continue;
+            if (src.startsWith("/")) src = baseUrl + src;
+
+            if (!src.startsWith("http")) continue;
+
+            if (
+                src.includes("logo") ||
+                src.includes("banner") ||
+                src.includes("favicon") ||
+                src.includes("loadingimg") ||
+                src.includes("default") ||
+                src.includes("avatar") ||
+                src.includes("og-image") ||
+                src.includes("icon") ||
+                src.includes("/thumb/")
+            ) {
+                continue;
+            }
+
+            if (!seen.has(src)) {
+                seen.add(src);
+                urls.push(src);
+            }
+        }
 
         const headers = {
             "Referer": baseUrl + "/",
