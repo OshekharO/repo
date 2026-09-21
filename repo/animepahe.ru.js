@@ -1,13 +1,13 @@
 // ==MiruExtension==
 // @name         Animepahe
-// @version      v0.0.3
+// @version      v0.0.4
 // @author       appdevelpo
 // @lang         en
 // @license      MIT
-// @icon         https://animepahe.ru/web-app-manifest-512x512.png
+// @icon         https://animepahe.pw/web-app-manifest-512x512.png
 // @package      animepahe.ru
 // @type         bangumi
-// @webSite      https://animepahe.ru
+// @webSite      https://animepahe.pw
 // @nsfw         false
 // ==/MiruExtension==
 
@@ -23,45 +23,26 @@ export default class extends Extension {
   }
 
   async latest(page) {
-    try {
-      const res = await this.request(`/api?m=airing&page=${page}`);
-      return res.data.map((item) => ({
-        title: item.anime_title,
-        url: item.anime_session.toString(),
-        cover: item.snapshot,
-      }));
-    } catch (e){
-      const bangumi = [{
-        title: "Need to use webview",
-        url: "/",
-        cover: null
-      }];
-      return bangumi;
-    }
+    const res = await this.request(`/api?m=airing&page=${page}`);
+    return res.data.map((item) => ({
+      title: item.anime_title,
+      url: item.anime_session.toString(),
+      cover: item.snapshot,
+    }));
   }
 
   async detail(url) {
-
-    // Webview is needed to get the detail page
-    if(url=="/"){
-      return {
-        title: "Use webview",
-        cover: null,
-        desc: "Please use webview to enter the website then close the webview window.",
-      }
-    }
-
     const res = await this.request("", {
       headers: {
-        "Miru-Url": `https://animepahe.ru/anime/${url}`,
+        "Miru-Url": `https://animepahe.pw/anime/${url}`,
       },
     });
-    // console.log(`https://animepahe.ru/anime/${url}`);
-    const title = await this.querySelector(res,".user-select-none > span").text
-    const cover = res.match(/<a href="(https:\/\/i.animepahe.ru\/posters.+?)"/)[1];
-    const desc = await this.querySelector(res,".anime-synopsis").text
+    // console.log(`https://animepahe.pw/anime/${url}`);
+    const title = await this.querySelector(res, ".user-select-none > span").text;
+    const cover = res.match(/<a href="(https:\/\/(?:i\.)?animepahe\.(?:ru|pw|com)\/posters.+?)"/)[1];
+    const desc = await this.querySelector(res, ".anime-synopsis").text;
     // console.log(`/api?m=release&id=${url}`);
-    const epRes = await this.request(`/api?m=release&id=${url}`)
+    const epRes = await this.request(`/api?m=release&id=${url}`);
     // console.log(epRes);
     const reverse_data = epRes.data.reverse();
     return {
@@ -99,24 +80,24 @@ export default class extends Extension {
     const url_split = url.split(';');
     const res = await this.request("", {
       headers: {
-        "Miru-Url": `https://animepahe.ru/play/${url_split[0]}`,
+        "Miru-Url": `https://animepahe.pw/play/${url_split[0]}`,
       }
-    })
+    });
     // console.log((/data-src="https:\/\/kwik.cx.+?"/g).exec(res)[parseInt(url_split[1])]);
     // console.log(res.match(/data-src="https:\/\/kwik.cx.+?"/g))
     // const src_match = res.match(/data-src="https:\/\/kwik.cx.+?"/g)[parseInt(url_split[1])]; //480,720,1080 === [0],[1],[2]
     // console.log(src_match);
     console.log(url_split[1]);
-    console.log(res.match(/data-src="(https:\/\/kwik\.si.+?)"/g))
+    console.log(res.match(/data-src="(https:\/\/kwik\.si.+?)"/g));
     const src = res.match(/data-src="(https:\/\/kwik\.si.+?)"/g)[parseInt(url_split[1])].match(/data-src="(.+?)"/)[1];
-      console.log(src);
+    console.log(src);
     const hid_res = await this.request("", {
       headers: {
         "Miru-Url": src,
-        "Referer": "https://animepahe.com",
+        "Referer": "https://animepahe.pw",
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36 Edg/107.0.1418.56"
       }
-    })
+    });
     const hid_script = hid_res.match(/eval\(f.+?\}\)\)/g)[1];
     const decode_script = eval(hid_script.match(/eval(.+)/)[1]);
     // the obfuscated script look like eval(function(p,a,c,k,e,d){e=function(c){return(c<a?......
@@ -127,4 +108,3 @@ export default class extends Extension {
     };
   }
 }
-
