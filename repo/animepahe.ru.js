@@ -13,9 +13,10 @@
 
 export default class extends Extension {
   async req(url) {
-    return this.request(url, {
+    const baseUrl = (await this.getSetting("animepahe")) || "https://animepahe.ng";
+    return this.request("", {
       headers: {
-        "Miru-Url": await this.getSetting("animepahe"),
+        "Miru-Url": `${baseUrl}${url}`,
       },
     });
   }
