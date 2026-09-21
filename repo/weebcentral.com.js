@@ -25,7 +25,7 @@ export default class extends Extension {
       title: "weebcentral URL",
       key: "weebcentral",
       type: "input",
-      description: "Homepage URL for AsuraScan",
+      description: "Homepage URL for WeebCentral",
       defaultValue: "https://weebcentral.com",
     });
   } 
@@ -46,7 +46,7 @@ export default class extends Extension {
             ]);
 
             return {
-                title: title.trim(),
+                title: title.replace(/ cover$/i, "").trim(),
                 url,
                 cover,
                 update: updateText,
@@ -56,17 +56,9 @@ export default class extends Extension {
 }
 
  async search(kw, page) {
-    const res = await this.request(`/search/simple`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: {
-            text: kw
-        }
-    });
+    const res = await this.req(`/search/data?author=&text=${encodeURIComponent(kw)}&sort=Best+Match&order=Ascending&official=Any&anime=Any&adult=Any&display_mode=Full+Display`);
 
-    const searchList = await this.querySelectorAll(res, "section div > a");
+    const searchList = await this.querySelectorAll(res, "article");
 
     return await Promise.all(
         searchList.map(async (element) => {
@@ -79,7 +71,7 @@ export default class extends Extension {
             ]);
 
             return {
-                title: title.trim(),
+                title: title.replace(/ cover$/i, "").trim(),
                 url,
                 cover,
             };
@@ -145,4 +137,3 @@ async watch(url) {
     return {urls};
   }
 }
-
