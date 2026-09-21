@@ -129,160 +129,72 @@ export default class extends Extension {
   }
 
   async watch(url) {
-    const rawIdMatch = url.match(/\/novel\/(\d+)\//i) || url.match(/\/serie-(\d+)\//i);
-    const rawId = rawIdMatch ? parseInt(rawIdMatch[1]) : 0;
-
     const chapterNoMatch = url.match(/chapter-(\d+)/i);
     const chapterNo = chapterNoMatch ? parseInt(chapterNoMatch[1]) : 1;
 
-    const chapterIdMatch = url.match(/chapter_id=(\d+)/i);
-    const chapterId = chapterIdMatch ? parseInt(chapterIdMatch[1]) : 0;
+    let res;
+    try {
+      res = await this.request("", {
+        headers: {
+          "Miru-Url": `https://wtr-scraper.vercel.app/api/scrape?url=${encodeURIComponent(url)}`,
+        },
+      });
+    } catch (_) {}
 
-    const res = await this.request("/api/reader/get", {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json, text/plain, */*",
-        Origin: "https://wtr-lab.com",
-        Referer: url,
-      },
-      data: {
-        translate: "web",
-        language: "en",
-        raw_id: rawId,
-        chapter_no: chapterNo,
-        retry: false,
-        force_retry: false,
-        chapter_id: chapterId,
-      },
-      method: "post",
-    });
-
-    const chapterObj = res?.chapter || {};
-    const title = chapterObj.title || `Chapter ${chapterNo}`;
-
-    let body = res?.data?.data?.content || res?.data?.data?.body || res?.data?.content || res?.data?.body || res?.content || res?.body || "";
-
-    if (typeof body === "string" && /^(arr|str):/.test(body)) {
-      const match = body.match(/^(arr|str):([^:]+):([^:]+):(.+)$/);
-      if (match) {
-        const [, type, ivB64, tagB64, encryptedB64] = match;
-
-        const AES_KEY = "IJAFUUxjM25hyzL2AZrn0wl7cESED6Ru";
-        const keyBytes = new Uint8Array(AES_KEY.length);
-        for (let i = 0; i < AES_KEY.length; i++) {
-          keyBytes[i] = AES_KEY.charCodeAt(i);
-        }
-
-        const b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        const b64tab = new Uint8Array(256);
-        for (let i = 0; i < 256; i++) b64tab[i] = 255;
-        for (let i = 0; i < b64chars.length; i++) b64tab[b64chars.charCodeAt(i)] = i;
-
-        const base64ToUint8Array = (str) => {
-          if (typeof atob !== "undefined") {
-            try {
-              const binaryString = atob(str.trim());
-              const bytes = new Uint8Array(binaryString.length);
-              for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              return bytes;
-            } catch (_) {}
-          }
-
-          const s = str.trim().replace(/=/g, "");
-          const len = s.length;
-          const buf = new Uint8Array((len * 3) >> 2);
-          let p = 0;
-
-          for (let i = 0; i < len; i += 4) {
-            const c1 = b64tab[s.charCodeAt(i)];
-            const c2 = b64tab[s.charCodeAt(i + 1)];
-            const c3 = i + 2 < len ? b64tab[s.charCodeAt(i + 2)] : 64;
-            const c4 = i + 3 < len ? b64tab[s.charCodeAt(i + 3)] : 64;
-
-            buf[p++] = (c1 << 2) | (c2 >> 4);
-            if (c3 !== 64) buf[p++] = ((c2 & 15) << 4) | (c3 >> 2);
-            if (c4 !== 64) buf[p++] = ((c3 & 3) << 6) | c4;
-          }
-
-          return buf.subarray(0, p);
-        };
-
-        const decodeUtf8 = (array) => {
-          if (typeof TextDecoder !== "undefined") {
-            return new TextDecoder().decode(array);
-          }
-          let out = "";
-          let i = 0;
-          while (i < array.length) {
-            let c = array[i++];
-            if (c < 128) {
-              out += String.fromCharCode(c);
-            } else if (c > 191 && c < 224) {
-              out += String.fromCharCode(((c & 31) << 6) | (array[i++] & 63));
-            } else if (c > 223 && c < 240) {
-              out += String.fromCharCode(((c & 15) << 12) | ((array[i++] & 63) << 6) | (array[i++] & 63));
-            } else {
-              const u = (((c & 7) << 18) | ((array[i++] & 63) << 12) | ((array[i++] & 63) << 6) | (array[i++] & 63)) - 0x10000;
-              out += String.fromCharCode(0xd800 + (u >> 10), 0xdc00 + (u & 0x3ff));
-            }
-          }
-          return out;
-        };
-
-        const iv = base64ToUint8Array(ivB64);
-        const tag = base64ToUint8Array(tagB64);
-        const cipherText = base64ToUint8Array(encryptedB64);
-
-        const cipherTextWithTag = new Uint8Array(cipherText.length + tag.length);
-        cipherTextWithTag.set(cipherText, 0);
-        cipherTextWithTag.set(tag, cipherText.length);
-
-        const webCrypto = typeof crypto !== "undefined" ? crypto : (typeof window !== "undefined" ? window.crypto : (typeof globalThis !== "undefined" ? globalThis.crypto : null));
-
-        if (webCrypto && webCrypto.subtle) {
-          const cryptoKey = await webCrypto.subtle.importKey(
-            "raw",
-            keyBytes,
-            { name: "AES-GCM" },
-            false,
-            ["decrypt"]
-          );
-
-          const decryptedBuffer = await webCrypto.subtle.decrypt(
-            {
-              name: "AES-GCM",
-              iv,
-              tagLength: 128,
-            },
-            cryptoKey,
-            cipherTextWithTag
-          );
-
-          const decryptedStr = decodeUtf8(new Uint8Array(decryptedBuffer));
-          body = type === "arr" ? JSON.parse(decryptedStr) : decryptedStr;
-        }
-      }
-    }
+    const resObj = typeof res === "string" ? JSON.parse(res) : res;
+    const title = resObj?.title || `Chapter ${chapterNo}`;
 
     let contentList = [];
 
-    if (Array.isArray(body)) {
-      contentList = body.map((item) => {
-        if (typeof item === "string") return item;
-        if (item?.text) return item.text;
-        if (item?.content) return item.content;
-        return JSON.stringify(item);
-      });
-    } else if (typeof body === "string" && body.trim().length > 0) {
-      contentList = body
-        .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/<\/(?:p|div)>/gi, "\n")
-        .replace(/<[^>]+>/g, "")
+    if (Array.isArray(resObj?.lines) && resObj.lines.length > 0) {
+      contentList = resObj.lines;
+    } else if (Array.isArray(resObj?.content)) {
+      contentList = resObj.content;
+    } else if (typeof resObj?.content === "string" && resObj.content.trim().length > 0) {
+      contentList = resObj.content
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean);
+    }
+
+    if (contentList.length === 0) {
+      const rawIdMatch = url.match(/\/novel\/(\d+)\//i) || url.match(/\/serie-(\d+)\//i);
+      const rawId = rawIdMatch ? parseInt(rawIdMatch[1]) : 0;
+      const chapterIdMatch = url.match(/chapter_id=(\d+)/i);
+      const chapterId = chapterIdMatch ? parseInt(chapterIdMatch[1]) : 0;
+
+      const fallbackRes = await this.request("/api/reader/get", {
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/plain, */*",
+          Origin: "https://wtr-lab.com",
+          Referer: url,
+        },
+        data: {
+          translate: "web",
+          language: "en",
+          raw_id: rawId,
+          chapter_no: chapterNo,
+          retry: false,
+          force_retry: false,
+          chapter_id: chapterId,
+        },
+        method: "post",
+      });
+
+      let body = fallbackRes?.data?.data?.content || fallbackRes?.data?.data?.body || fallbackRes?.data?.content || fallbackRes?.data?.body || fallbackRes?.content || fallbackRes?.body || "";
+
+      if (Array.isArray(body)) {
+        contentList = body.map((item) => (typeof item === "string" ? item : JSON.stringify(item)));
+      } else if (typeof body === "string" && body.trim().length > 0) {
+        contentList = body
+          .replace(/<br\s*\/?>/gi, "\n")
+          .replace(/<\/(?:p|div)>/gi, "\n")
+          .replace(/<[^>]+>/g, "")
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
     }
 
     return {
