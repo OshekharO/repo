@@ -14,9 +14,9 @@
 export default class extends Extension {
   async req(url) {
     const baseUrl = (await this.getSetting("animepahe")) || "https://animepahe.pw";
-    return this.request("", {
+    return this.request(url, {
       headers: {
-        "Miru-Url": `${baseUrl}${url}`,
+        "Miru-Url": baseUrl,
       },
     });
   }
@@ -33,7 +33,7 @@ export default class extends Extension {
 
   async latest(page) {
     try {
-      // Try JSON API first (used by animepahe.pw / animepahe.org / animepahe.ru)
+      // Try JSON API first (used by animepahe.pw / animepahe.org)
       const apiRes = await this.req(`/api?m=airing&page=${page}`);
       try {
         const json = typeof apiRes === "string" ? JSON.parse(apiRes) : apiRes;
@@ -143,15 +143,13 @@ export default class extends Extension {
     }
 
     try {
-      const requestUrl = url.startsWith("http") ? url : `/anime/${url}`;
-      const res = await this.request("", {
-        headers: {
-          "Miru-Url": requestUrl,
-        },
-      });
+      const isHttp = url.startsWith("http");
+      const res = isHttp
+        ? await this.request("", { headers: { "Miru-Url": url } })
+        : await this.req(`/anime/${url}`);
 
       // Try JSON API for episode list if session url
-      if (!url.startsWith("http")) {
+      if (!isHttp) {
         try {
           const epRes = await this.req(`/api?m=release&id=${url}`);
           const json = typeof epRes === "string" ? JSON.parse(epRes) : epRes;
@@ -163,7 +161,7 @@ export default class extends Extension {
             const reverse_data = json.data.reverse();
 
             return {
-              title: title.trim(),
+              title: title ? title.trim() : "",
               cover,
               desc: desc ? desc.trim() : "",
               episodes: [
@@ -249,9 +247,9 @@ export default class extends Extension {
     if (url.includes(";")) {
       const url_split = url.split(";");
       const baseUrl = (await this.getSetting("animepahe")) || "https://animepahe.pw";
-      const res = await this.request("", {
+      const res = await this.request(`/play/${url_split[0]}`, {
         headers: {
-          "Miru-Url": `${baseUrl}/play/${url_split[0]}`,
+          "Miru-Url": baseUrl,
         },
       });
 
