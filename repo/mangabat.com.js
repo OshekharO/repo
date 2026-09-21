@@ -12,9 +12,12 @@
 
 export default class extends Extension {
     async req(url) {
+        const baseUrl = await this.getSetting("mangabat");
         return this.request(url, {
             headers: {
-                "Miru-Url": await this.getSetting("mangabat"),
+                "Miru-Url": baseUrl,
+                "Referer": baseUrl + "/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             },
         });
     }
@@ -91,6 +94,8 @@ export default class extends Extension {
         const res = await this.request("", {
             headers: {
                 "Miru-Url": url,
+                "Referer": baseUrl + "/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             },
         });
 
@@ -110,7 +115,12 @@ export default class extends Extension {
             const slug = match[1];
             try {
                 const apiUrl = `${baseUrl}/api/manga/${slug}/chapters?limit=10000`;
-                const apiRes = await this.request(apiUrl);
+                const apiRes = await this.request(apiUrl, {
+                    headers: {
+                        "Referer": baseUrl + "/",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    },
+                });
                 const data = typeof apiRes === "string" ? JSON.parse(apiRes) : apiRes;
                 if (data && data.success && data.data && data.data.chapters) {
                     episodes = data.data.chapters.map((c) => {
@@ -165,6 +175,8 @@ export default class extends Extension {
         const res = await this.request("", {
             headers: {
                 "Miru-Url": url,
+                "Referer": baseUrl + "/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             },
         });
 
@@ -184,8 +196,15 @@ export default class extends Extension {
             })
             .filter((src) => src && !src.includes("logo") && !src.includes("banner") && !src.includes("favicon") && !src.includes("loadingimg") && !src.includes("default") && !src.includes("avatar"));
 
+        const headers = {
+            "Referer": baseUrl + "/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        };
+
         return {
             urls,
+            headers,
+            header: headers,
         };
     }
 }
