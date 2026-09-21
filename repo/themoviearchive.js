@@ -80,6 +80,9 @@ export default class extends Extension {
     const res = await this.request("", {
       headers: {
         "Miru-Url": `https://api.vidlove.cc/movie?id=${url}&mode=json`,
+        "Referer": "https://player.vidlove.cc/",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
     return {
