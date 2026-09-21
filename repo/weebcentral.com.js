@@ -12,10 +12,23 @@
  
     
 export default class extends Extension {
+  async getDomain() {
+    return (await this.getSetting("weebcentral")) || "https://weebcentral.com";
+  }
+
+  async fixUrl(url) {
+    if (!url) return "";
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return url;
+    }
+    const domain = await this.getDomain();
+    return `${domain}${url.startsWith("/") ? "" : "/"}${url}`;
+  }
+
   async req(url) { 
     return this.request(url, {
       headers: {
-        "Miru-Url": await this.getSetting("weebcentral"),
+        "Miru-Url": await this.getDomain(),
       },
     });
   }    
@@ -47,7 +60,7 @@ export default class extends Extension {
 
             return {
                 title: title.replace(/ cover$/i, "").trim(),
-                url,
+                url: await this.fixUrl(url),
                 cover,
                 update: updateText,
             };
@@ -72,7 +85,7 @@ export default class extends Extension {
 
             return {
                 title: title.replace(/ cover$/i, "").trim(),
-                url,
+                url: await this.fixUrl(url),
                 cover,
             };
         })
@@ -80,6 +93,7 @@ export default class extends Extension {
 }
 
 async detail(url) {
+    url = await this.fixUrl(url);
     const res = await this.request("", {
       headers: {
         "Miru-Url": url,
@@ -92,7 +106,10 @@ async detail(url) {
       this.querySelector(res, "div#top section p").text,
     ]);
 
-    const fullChapsUrl = await this.getAttributeText(res, "#chapter-list > button","hx-get") || "";
+    let fullChapsUrl = await this.getAttributeText(res, "#chapter-list > button","hx-get") || "";
+    if (fullChapsUrl) {
+      fullChapsUrl = await this.fixUrl(fullChapsUrl);
+    }
     
     const htmlChaplist = fullChapsUrl
       ? await this.request("", { headers: { "Miru-Url": fullChapsUrl } })
@@ -104,9 +121,9 @@ async detail(url) {
     const episodes = await Promise.all(
       chapList.map(async (element) => {
         const name = await this.querySelector(element.content, "span.grow > span:first-child").text;
-        const episodeUrl =await this.getAttributeText(element.content,"a","href"); 
+        const episodeUrl = await this.getAttributeText(element.content,"a","href");
 
-        return { name: name.trim(), url: episodeUrl };
+        return { name: name.trim(), url: await this.fixUrl(episodeUrl) };
       })
     );
 
@@ -120,6 +137,7 @@ async detail(url) {
   }
 
 async watch(url) {
+    url = await this.fixUrl(url);
     const res = await this.request("", {
       headers: {
         "Miru-Url": `${url}/images?is_prev=False&current_page=1&reading_style=long_strip`,
