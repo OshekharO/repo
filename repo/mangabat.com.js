@@ -39,125 +39,108 @@ export default class extends Extension {
 
     async latest(page) {
         const baseUrl = await this.getSetting("mangabat");
-        let res = await this.req(`/genre/all?type=latest&state=all&page=${page}`);
+        const res = await this.req(`/genre/all?type=latest&state=all&page=${page}`);
 
-        let items = await this.querySelectorAll(res, ".list-comic-item-wrap");
+        const matches = [...res.matchAll(/<div[^>]*class="list-comic-item-wrap"[\s\S]*?<a[^>]*href="([^"]+)"[^>]*title="([^"]*)"[\s\S]*?<img[^>]*src="([^"]+)"/gi)];
 
-        let respItems = await Promise.all(items.map(async (item) => {
-            let url = (await this.getAttributeText(item.content, "a.cover", "href")) || "";
-            if (!url) url = (await this.getAttributeText(item.content, "h3 a", "href")) || "";
+        const comic = matches.map((m) => {
+            let itemUrl = m[1] || "";
+            let itemTitle = m[2] || "";
+            let itemCover = m[3] || "";
 
-            let titleObj = await this.querySelector(item.content, "h3 a");
-            let title = (titleObj && titleObj.text) ? titleObj.text.trim() : "";
-            if (!title) title = (await this.getAttributeText(item.content, "a.cover", "title")) || "";
-
-            let cover = (await this.getAttributeText(item.content, "img", "src")) || "";
-            if (!cover) cover = (await this.getAttributeText(item.content, "img", "data-src")) || "";
-
-            if (url && url.startsWith("/")) url = baseUrl + url;
-            if (cover && cover.startsWith("/")) cover = baseUrl + cover;
+            if (itemUrl && itemUrl.startsWith("/")) itemUrl = baseUrl + itemUrl;
+            if (itemCover && itemCover.startsWith("/")) itemCover = baseUrl + itemCover;
 
             return {
-                url: url || "",
-                cover: cover || "",
-                title: title || "",
+                url: itemUrl,
+                title: itemTitle.trim(),
+                cover: itemCover,
             };
-        }));
+        });
 
-        return respItems.filter((i) => i.url && i.title);
+        return comic.filter((item) => item.url && item.title);
     }
 
     async search(kw, page) {
         const baseUrl = await this.getSetting("mangabat");
         const cleanKw = kw.trim().replace(/ /g, "_");
-        let res = await this.req(`/search/story/${cleanKw}?page=${page}`);
+        const res = await this.req(`/search/story/${cleanKw}?page=${page}`);
 
-        let items = await this.querySelectorAll(res, ".story_item");
+        const matches = [...res.matchAll(/<div[^>]*class="story_item"[\s\S]*?<a[^>]*href="([^"]+)"[\s\S]*?<img[^>]*src="([^"]+)"[\s\S]*?<h3[^>]*class="story_name"[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]+?)<\/a>/gi)];
 
-        let respItems = await Promise.all(items.map(async (item) => {
-            let url = (await this.getAttributeText(item.content, "h3.story_name a", "href")) || "";
-            if (!url) url = (await this.getAttributeText(item.content, "a", "href")) || "";
+        const comic = matches.map((m) => {
+            let itemUrl = m[3] || m[1] || "";
+            let itemCover = m[2] || "";
+            let itemTitle = (m[4] || "").replace(/<[^>]+>/g, "").trim();
 
-            let titleObj = await this.querySelector(item.content, "h3.story_name a");
-            let title = (titleObj && titleObj.text) ? titleObj.text.trim() : "";
-            if (!title) title = (await this.getAttributeText(item.content, "a", "title")) || "";
-
-            let cover = (await this.getAttributeText(item.content, "img", "src")) || "";
-            if (!cover) cover = (await this.getAttributeText(item.content, "img", "data-src")) || "";
-
-            if (url && url.startsWith("/")) url = baseUrl + url;
-            if (cover && cover.startsWith("/")) cover = baseUrl + cover;
+            if (itemUrl && itemUrl.startsWith("/")) itemUrl = baseUrl + itemUrl;
+            if (itemCover && itemCover.startsWith("/")) itemCover = baseUrl + itemCover;
 
             return {
-                url: url || "",
-                cover: cover || "",
-                title: title || "",
+                url: itemUrl,
+                title: itemTitle,
+                cover: itemCover,
             };
-        }));
+        });
 
-        return respItems.filter((i) => i.url && i.title);
+        return comic.filter((item) => item.url && item.title);
     }
 
     async detail(url) {
-        let res = await this.request('', {
+        const baseUrl = await this.getSetting("mangabat");
+        const res = await this.request("", {
             headers: {
                 "Miru-Url": url,
             },
         });
 
-        const baseUrl = await this.getSetting("mangabat");
+        const titleMatch = res.match(/<h1[^>]*>([\s\S]+?)<\/h1>/i);
+        let title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, "").trim() : "";
 
-        let titleObj = await this.querySelector(res, "h1");
-        let title = (titleObj && titleObj.text) ? titleObj.text.trim() : "";
-
-        let cover = (await this.getAttributeText(res, ".thumbnail-wrap img", "src")) || "";
-        if (!cover) cover = (await this.getAttributeText(res, ".manga-info-pic img", "src")) || "";
+        const coverMatch = res.match(/<div[^>]*class="thumbnail-wrap"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"/i) || res.match(/<div[^>]*class="manga-info-pic"[^>]*>[\s\S]*?<img[^>]*src="([^"]+)"/i);
+        let cover = coverMatch ? coverMatch[1] : "";
         if (cover && cover.startsWith("/")) cover = baseUrl + cover;
 
-        let descObj = await this.querySelector(res, "#contentBox");
-        let desc = (descObj && descObj.text) ? descObj.text.trim() : "";
-        if (!desc) {
-            descObj = await this.querySelector(res, "#panel-story-info-description");
-            desc = (descObj && descObj.text) ? descObj.text.trim() : "";
-        }
-        if (!desc) {
-            descObj = await this.querySelector(res, ".description");
-            desc = (descObj && descObj.text) ? descObj.text.trim() : "";
-        }
+        const descMatch = res.match(/id="contentBox"[^>]*>([\s\S]+?)<\/div>/i) || res.match(/id="panel-story-info-description"[^>]*>([\s\S]+?)<\/div>/i) || res.match(/class="description"[^>]*>([\s\S]+?)<\/div>/i);
+        let desc = descMatch ? descMatch[1].replace(/<[^>]+>/g, "").trim() : "";
 
         let episodes = [];
-        let slug = "";
         const match = url.match(/\/manga\/([^\/]+)/);
-        if (match) slug = match[1];
-
-        if (slug) {
+        if (match) {
+            const slug = match[1];
             try {
                 const apiUrl = `${baseUrl}/api/manga/${slug}/chapters?limit=10000`;
                 const apiRes = await this.request(apiUrl);
                 const data = typeof apiRes === "string" ? JSON.parse(apiRes) : apiRes;
                 if (data && data.success && data.data && data.data.chapters) {
-                    episodes = data.data.chapters.map((c) => ({
-                        name: String(c.chapter_name || ""),
-                        url: `${baseUrl}/manga/${slug}/${c.chapter_slug}`,
-                    }));
+                    episodes = data.data.chapters.map((c) => {
+                        let epUrl = `${baseUrl}/manga/${slug}/${c.chapter_slug}`;
+                        return {
+                            name: String(c.chapter_name || ""),
+                            url: epUrl,
+                        };
+                    });
                 }
             } catch (e) {
-                // Fallback to DOM parsing if API call fails
+                // Fallback if API fails
             }
         }
 
         if (episodes.length === 0) {
-            let epiList = await this.querySelectorAll(res, "ul.row-content-chapter li, .chapter-list a, .a-h");
-            episodes = await Promise.all(epiList.map(async (element) => {
-                let epUrl = (await this.getAttributeText(element.content, "a", "href")) || "";
-                if (epUrl && epUrl.startsWith("/")) epUrl = baseUrl + epUrl;
-                let epNameObj = await this.querySelector(element.content, "a");
-                let epName = (epNameObj && epNameObj.text) ? epNameObj.text.trim() : "";
-                return {
-                    url: epUrl || "",
-                    name: epName || "",
-                };
-            }));
+            const chapMatches = [...res.matchAll(/<a[^>]*href="([^"]*\/chapter-[^"]*)"[^>]*>([\s\S]+?)<\/a>/gi)];
+            const seen = new Set();
+            for (const m of chapMatches) {
+                let epUrl = m[1] || "";
+                if (!epUrl || seen.has(epUrl)) continue;
+                seen.add(epUrl);
+                if (epUrl.startsWith("/")) epUrl = baseUrl + epUrl;
+
+                let epName = (m[2] || "").replace(/<[^>]+>/g, "").trim();
+                episodes.push({
+                    name: epName,
+                    url: epUrl,
+                });
+            }
         }
 
         if ((await this.getSetting("reverseChaptersOrder")) === "true") {
@@ -178,25 +161,31 @@ export default class extends Extension {
     }
 
     async watch(url) {
+        const baseUrl = await this.getSetting("mangabat");
         const res = await this.request("", {
             headers: {
                 "Miru-Url": url,
             },
         });
 
-        const baseUrl = await this.getSetting("mangabat");
+        const idx = res.indexOf("container-chapter-reader");
+        let containerContent = idx !== -1 ? res.slice(idx) : res;
+        const commentIdx = containerContent.search(/<div[^>]*class=['\"][^'\"]*(?:comment|footer|panel-category)/i);
+        if (commentIdx !== -1) {
+            containerContent = containerContent.slice(0, commentIdx);
+        }
 
-        const images = await Promise.all((await this.querySelectorAll(res, "div.container-chapter-reader img")).map(async (element) => {
-            const html = await element.content;
-            let src = (await this.getAttributeText(html, "img", "src")) || "";
-            if (!src) src = (await this.getAttributeText(html, "img", "data-src")) || "";
-            src = src.trim();
-            if (src && src.startsWith("/")) src = baseUrl + src;
-            return src;
-        }));
+        const imgMatches = [...containerContent.matchAll(/<img[^>]*src=['\"]([^'\"]+)['\"]/gi)];
+        const urls = imgMatches
+            .map((m) => {
+                let src = (m[1] || "").trim();
+                if (src && src.startsWith("/")) src = baseUrl + src;
+                return src;
+            })
+            .filter((src) => src && !src.includes("logo") && !src.includes("banner") && !src.includes("favicon") && !src.includes("loadingimg") && !src.includes("default") && !src.includes("avatar"));
 
         return {
-            urls: images.filter((i) => typeof i === "string" && i.length > 0),
+            urls,
         };
     }
 }
