@@ -40,13 +40,13 @@ export default class extends Extension {
         const html = element.content;
         const [url, title, cover, update] = await Promise.all([
           this.getAttributeText(html, "div.bsx > a", "href"),
-          this.querySelector(html, "div.tt").text,
+          this.getAttributeText(html, "div.bsx > a", "title"),
           this.getAttributeText(html, "img", "src"),
           this.querySelector(html, "span.epx").text,
         ]);
 
         return {
-          title: title.trim(),
+          title: (title || (await this.querySelector(html, "div.tt").text)).trim(),
           url,
           cover,
           update: update ? update.trim() : "",
@@ -64,12 +64,12 @@ export default class extends Extension {
         const html = element.content;
         const [url, title, cover] = await Promise.all([
           this.getAttributeText(html, "div.bsx > a", "href"),
-          this.querySelector(html, "div.tt").text,
+          this.getAttributeText(html, "div.bsx > a", "title"),
           this.getAttributeText(html, "img", "src"),
         ]);
 
         return {
-          title: title.trim(),
+          title: (title || (await this.querySelector(html, "div.tt").text)).trim(),
           url,
           cover,
         };
@@ -84,25 +84,43 @@ export default class extends Extension {
       },
     });
 
-    const [title, cover, desc] = await Promise.all([
-      this.querySelector(res, "h1.entry-title").text,
-      this.getAttributeText(res, "div.thumb > img", "src"),
-      this.querySelector(res, "div.entry-content[itemprop='description']").text,
-    ]);
+    let title = await this.querySelector(res, "h1.entry-title").text;
+    if (!title) {
+      title = await this.querySelector(res, "div.det > h2").text;
+    }
 
-    const epList = await this.querySelectorAll(res, "div.eplister > ul > li");
+    let cover = await this.getAttributeText(res, "div.thumb > img", "src");
+    if (!cover) {
+      cover = await this.getAttributeText(res, "div.thumbnel > img", "src");
+    }
+
+    let desc = await this.querySelector(res, "div.entry-content[itemprop='description']").text;
+    if (!desc) {
+      desc = await this.querySelector(res, "div.entry-content").text;
+    }
+
+    let epList = await this.querySelectorAll(res, "div.eplister > ul > li");
+    if (epList.length === 0) {
+      epList = await this.querySelectorAll(res, "div.episodelist > ul > li");
+    }
 
     const episodes = await Promise.all(
       epList.map(async (element) => {
         const html = element.content;
-        const name = await this.querySelector(html, "div.epl-title").text;
+        let name = await this.querySelector(html, "div.epl-title").text;
+        if (!name) {
+          name = await this.querySelector(html, "div.playinfo > h3").text;
+        }
+        if (!name) {
+          name = await this.getAttributeText(html, "a", "title");
+        }
         const episodeUrl = await this.getAttributeText(html, "a", "href");
         return { name: name.trim(), url: episodeUrl };
       })
     );
 
     return {
-      title: title.trim(),
+      title: title ? title.trim() : "",
       cover,
       desc: desc ? desc.trim() : "",
       episodes: [{ title: "Episodes", urls: episodes }],
