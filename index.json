@@ -955,15 +955,15 @@
  },
  {
   "author": "OshekharO",
-  "icon": "https://manganato.com/themes/hm/images/logo.png",
+  "icon": "https://www.manganato.gg/images/favicon-manganato.webp",
   "lang": "en",
   "license": "MIT",
   "name": "Manganato",
   "package": "manganato",
   "type": "manga",
   "url": "manganato.js",
-  "version": "v0.0.1",
-  "webSite": "https://manganato.com"
+  "version": "v0.0.2",
+  "webSite": "https://www.manganato.gg"
  },
  {
   "author": "ftbom",

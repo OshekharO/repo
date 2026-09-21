@@ -1,13 +1,13 @@
 // ==MiruExtension==
 // @name         Manganato
-// @version      v0.0.1
+// @version      v0.0.2
 // @author       OshekharO
 // @lang         en
 // @license      MIT
-// @icon         https://manganato.com/themes/hm/images/logo.png
+// @icon         https://www.manganato.gg/images/favicon-manganato.webp
 // @package      manganato
 // @type         manga
-// @webSite      https://manganato.com
+// @webSite      https://www.manganato.gg
 // ==/MiruExtension==
 
 export default class extends Extension {
@@ -25,7 +25,7 @@ export default class extends Extension {
    key: "manganato",
    type: "input",
    description: "Homepage URL for Manganato",
-   defaultValue: "https://manganato.com",
+   defaultValue: "https://www.manganato.gg",
   });
 
   this.registerSetting({
@@ -37,70 +37,139 @@ export default class extends Extension {
   });
  }
 
- async latest() {
-  const res = await this.req(`/`);
-  const latest = await this.querySelectorAll(res, "div.content-homepage-item");
+ async latest(page) {
+  const baseUrl = await this.getSetting("manganato");
+  const res = await this.req(page && page > 1 ? `/manga-list/latest-manga?page=${page}` : `/`);
+  const latest = await this.querySelectorAll(res, "div.itemupdate");
 
   let comic = [];
   for (const element of latest) {
    const html = await element.content;
-   const url = await this.getAttributeText(html, "a.a-h", "href");
-   const title = await this.querySelector(html, "a.a-h").text;
-   const cover = await this.querySelector(html, "img.img-loading").getAttributeText("src");
+   let url = await this.getAttributeText(html, "a", "href");
+   if (url && !url.startsWith("http")) {
+    url = baseUrl + url;
+   }
 
-   comic.push({
-    title: title.trim(),
-    url,
-    cover,
-   });
+   const titleEl = await this.querySelector(html, "h3 a");
+   const title = titleEl ? titleEl.text : "";
+
+   const imgEl = await this.querySelector(html, "img");
+   let cover = "";
+   if (imgEl) {
+    cover = (await imgEl.getAttributeText("src")) || (await imgEl.getAttributeText("data-src")) || "";
+   }
+
+   if (title && url) {
+    comic.push({
+     title: title.trim(),
+     url,
+     cover,
+    });
+   }
   }
   return comic;
  }
 
- async search(kw) {
+ async search(kw, page) {
+  const baseUrl = await this.getSetting("manganato");
   const kwstring = kw.replace(/ /g, "_");
-  const res = await this.req(`/search/story/${kwstring}`);
-  const searchList = await this.querySelectorAll(res, "div.search-story-item");
-  const result = await Promise.all(
-   searchList.map(async (element) => {
-    const html = await element.content;
-    const url = await this.getAttributeText(html, "a.a-h", "href");
-    const title = await this.querySelector(html, "a.a-h").text;
-    const cover = await this.querySelector(html, "img.img-loading").getAttributeText("src");
+  const pageParam = page && page > 1 ? `?page=${page}` : "";
+  const res = await this.req(`/search/story/${kwstring}${pageParam}`);
+  const searchList = await this.querySelectorAll(res, "div.story_item");
 
-    return {
+  let result = [];
+  for (const element of searchList) {
+   const html = await element.content;
+   let url = await this.getAttributeText(html, "a", "href");
+   if (url && !url.startsWith("http")) {
+    url = baseUrl + url;
+   }
+
+   const titleEl = await this.querySelector(html, "h3.story_name a");
+   const title = titleEl ? titleEl.text : "";
+
+   const imgEl = await this.querySelector(html, "img");
+   let cover = "";
+   if (imgEl) {
+    cover = (await imgEl.getAttributeText("src")) || (await imgEl.getAttributeText("data-src")) || "";
+   }
+
+   if (title && url) {
+    result.push({
      title: title.trim(),
      url,
      cover,
-    };
-   })
-  );
+    });
+   }
+  }
   return result;
  }
 
  async detail(url) {
+  const baseUrl = await this.getSetting("manganato");
   const res = await this.request("", {
    headers: {
     "Miru-Url": url,
    },
   });
 
-  const title = await this.querySelector(res, "h1").text;
-  const cover = await this.querySelector(res, "img.img-loading").getAttributeText("src");
-  const desc = await this.querySelector(res, "div.panel-story-info-description").text;
+  const titleEl = await this.querySelector(res, "h1");
+  const title = titleEl ? titleEl.text : "";
 
-  const epiList = await this.querySelectorAll(res, "li.a-h");
-  const episodes = await Promise.all(
-   epiList.map(async (element) => {
-    const html = await element.content;
-    const name = await this.querySelector(html, "a").text;
-    const url = await this.getAttributeText(html, "a", "href");
-    return {
-     name,
-     url: url,
-    };
-   })
-  );
+  const imgEl = (await this.querySelector(res, "div.thumbnail-wrap img")) || (await this.querySelector(res, "div.manga-info-pic img"));
+  const cover = imgEl ? await imgEl.getAttributeText("src") : "";
+
+  let desc = "";
+  const descEl = await this.querySelector(res, "div[style*='overflow: hidden']");
+  if (descEl) {
+   desc = descEl.text;
+   // Clean up summary heading prefix if present
+   desc = desc.replace(/^[\s\S]*?summary:\s*/i, "");
+  }
+
+  // Extract slug from URL to query chapters API
+  // URL pattern: https://www.manganato.gg/manga/solo-leveling
+  const match = url.match(/\/manga\/([^/]+)/);
+  let episodes = [];
+
+  if (match && match[1]) {
+   const slug = match[1];
+   try {
+    const apiRes = await this.request(`/api/manga/${slug}/chapters`, {
+     headers: {
+      "Miru-Url": baseUrl,
+     },
+    });
+    // Parse json response string if needed
+    const data = typeof apiRes === "string" ? JSON.parse(apiRes) : apiRes;
+    if (data && data.success && data.data && data.data.chapters) {
+     episodes = data.data.chapters.map((ch) => {
+      const chUrl = `${baseUrl}/manga/${slug}/${ch.chapter_slug}`;
+      return {
+       name: ch.chapter_name || `Chapter ${ch.chapter_num}`,
+       url: chUrl,
+      };
+     });
+    }
+   } catch (e) {
+    // Fallback to DOM parsing if API fails
+    const epiList = await this.querySelectorAll(res, "li.a-h, div.manga-info-chapter a");
+    for (const element of epiList) {
+     const html = await element.content;
+     const aEl = await this.querySelector(html, "a");
+     if (aEl) {
+      let epUrl = await aEl.getAttributeText("href");
+      if (epUrl && !epUrl.startsWith("http")) {
+       epUrl = baseUrl + epUrl;
+      }
+      episodes.push({
+       name: aEl.text.trim(),
+       url: epUrl,
+      });
+     }
+    }
+   }
+  }
 
   if ((await this.getSetting("reverseChaptersOrder")) === "true") {
    episodes.reverse();
@@ -126,14 +195,15 @@ export default class extends Extension {
    },
   });
 
-  const images = await Promise.all(
-   (await this.querySelectorAll(res, "div.container-chapter-reader > img")).map(async (element) => {
-    const html = await element.content;
-    let dataSrc = await this.getAttributeText(html, "img", "src");
-    dataSrc = dataSrc.trim();
-    return dataSrc;
-   })
-  );
+  const images = [];
+  const imgList = await this.querySelectorAll(res, "div.container-chapter-reader img");
+  for (const element of imgList) {
+   const html = await element.content;
+   let dataSrc = await this.getAttributeText(html, "img", "src");
+   if (dataSrc) {
+    images.push(dataSrc.trim());
+   }
+  }
 
   return {
    urls: images,
