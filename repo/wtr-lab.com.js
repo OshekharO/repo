@@ -239,26 +239,30 @@ export default class extends Extension {
         cipherTextWithTag.set(cipherText, 0);
         cipherTextWithTag.set(tag, cipherText.length);
 
-        const cryptoKey = await crypto.subtle.importKey(
-          "raw",
-          keyBytes,
-          { name: "AES-GCM" },
-          false,
-          ["decrypt"]
-        );
+        const webCrypto = typeof crypto !== "undefined" ? crypto : (typeof window !== "undefined" ? window.crypto : (typeof globalThis !== "undefined" ? globalThis.crypto : null));
 
-        const decryptedBuffer = await crypto.subtle.decrypt(
-          {
-            name: "AES-GCM",
-            iv,
-            tagLength: 128,
-          },
-          cryptoKey,
-          cipherTextWithTag
-        );
+        if (webCrypto && webCrypto.subtle) {
+          const cryptoKey = await webCrypto.subtle.importKey(
+            "raw",
+            keyBytes,
+            { name: "AES-GCM" },
+            false,
+            ["decrypt"]
+          );
 
-        const decryptedStr = decodeUtf8(new Uint8Array(decryptedBuffer));
-        body = type === "arr" ? JSON.parse(decryptedStr) : decryptedStr;
+          const decryptedBuffer = await webCrypto.subtle.decrypt(
+            {
+              name: "AES-GCM",
+              iv,
+              tagLength: 128,
+            },
+            cryptoKey,
+            cipherTextWithTag
+          );
+
+          const decryptedStr = decodeUtf8(new Uint8Array(decryptedBuffer));
+          body = type === "arr" ? JSON.parse(decryptedStr) : decryptedStr;
+        }
       }
     }
 
