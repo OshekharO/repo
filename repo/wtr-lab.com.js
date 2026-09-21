@@ -173,13 +173,40 @@ export default class extends Extension {
           keyBytes[i] = AES_KEY.charCodeAt(i);
         }
 
-        const base64ToUint8Array = (base64) => {
-          const binaryString = atob(base64.trim());
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
+        const b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        const b64tab = new Uint8Array(256);
+        for (let i = 0; i < 256; i++) b64tab[i] = 255;
+        for (let i = 0; i < b64chars.length; i++) b64tab[b64chars.charCodeAt(i)] = i;
+
+        const base64ToUint8Array = (str) => {
+          if (typeof atob !== "undefined") {
+            try {
+              const binaryString = atob(str.trim());
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              return bytes;
+            } catch (_) {}
           }
-          return bytes;
+
+          const s = str.trim().replace(/=/g, "");
+          const len = s.length;
+          const buf = new Uint8Array((len * 3) >> 2);
+          let p = 0;
+
+          for (let i = 0; i < len; i += 4) {
+            const c1 = b64tab[s.charCodeAt(i)];
+            const c2 = b64tab[s.charCodeAt(i + 1)];
+            const c3 = i + 2 < len ? b64tab[s.charCodeAt(i + 2)] : 64;
+            const c4 = i + 3 < len ? b64tab[s.charCodeAt(i + 3)] : 64;
+
+            buf[p++] = (c1 << 2) | (c2 >> 4);
+            if (c3 !== 64) buf[p++] = ((c2 & 15) << 4) | (c3 >> 2);
+            if (c4 !== 64) buf[p++] = ((c3 & 3) << 6) | c4;
+          }
+
+          return buf.subarray(0, p);
         };
 
         const decodeUtf8 = (array) => {
