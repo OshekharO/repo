@@ -51,17 +51,13 @@ export default class extends Extension {
    }
 
    const titleEl = await this.querySelector(html, "h3 a");
-   const title = titleEl ? titleEl.text : "";
+   const title = titleEl && titleEl.text ? titleEl.text.trim() : "";
 
-   const imgEl = await this.querySelector(html, "img");
-   let cover = "";
-   if (imgEl) {
-    cover = (await imgEl.getAttributeText("src")) || (await imgEl.getAttributeText("data-src")) || "";
-   }
+   let cover = (await this.getAttributeText(html, "img", "src")) || (await this.getAttributeText(html, "img", "data-src")) || "";
 
    if (title && url) {
     comic.push({
-     title: title.trim(),
+     title,
      url,
      cover,
     });
@@ -86,17 +82,13 @@ export default class extends Extension {
    }
 
    const titleEl = await this.querySelector(html, "h3.story_name a");
-   const title = titleEl ? titleEl.text : "";
+   const title = titleEl && titleEl.text ? titleEl.text.trim() : "";
 
-   const imgEl = await this.querySelector(html, "img");
-   let cover = "";
-   if (imgEl) {
-    cover = (await imgEl.getAttributeText("src")) || (await imgEl.getAttributeText("data-src")) || "";
-   }
+   let cover = (await this.getAttributeText(html, "img", "src")) || (await this.getAttributeText(html, "img", "data-src")) || "";
 
    if (title && url) {
     result.push({
-     title: title.trim(),
+     title,
      url,
      cover,
     });
@@ -114,21 +106,16 @@ export default class extends Extension {
   });
 
   const titleEl = await this.querySelector(res, "h1");
-  const title = titleEl ? titleEl.text : "";
+  const title = titleEl && titleEl.text ? titleEl.text.trim() : "";
 
-  const imgEl = (await this.querySelector(res, "div.thumbnail-wrap img")) || (await this.querySelector(res, "div.manga-info-pic img"));
-  const cover = imgEl ? await imgEl.getAttributeText("src") : "";
+  const cover = (await this.getAttributeText(res, "div.thumbnail-wrap img", "src")) || (await this.getAttributeText(res, "div.manga-info-pic img", "src")) || "";
 
   let desc = "";
   const descEl = await this.querySelector(res, "div[style*='overflow: hidden']");
-  if (descEl) {
-   desc = descEl.text;
-   // Clean up summary heading prefix if present
-   desc = desc.replace(/^[\s\S]*?summary:\s*/i, "");
+  if (descEl && descEl.text) {
+   desc = descEl.text.replace(/^[\s\S]*?summary:\s*/i, "").trim();
   }
 
-  // Extract slug from URL to query chapters API
-  // URL pattern: https://www.manganato.gg/manga/solo-leveling
   const match = url.match(/\/manga\/([^/]+)/);
   let episodes = [];
 
@@ -140,7 +127,6 @@ export default class extends Extension {
       "Miru-Url": baseUrl,
      },
     });
-    // Parse json response string if needed
     const data = typeof apiRes === "string" ? JSON.parse(apiRes) : apiRes;
     if (data && data.success && data.data && data.data.chapters) {
      episodes = data.data.chapters.map((ch) => {
@@ -152,18 +138,17 @@ export default class extends Extension {
      });
     }
    } catch (e) {
-    // Fallback to DOM parsing if API fails
     const epiList = await this.querySelectorAll(res, "li.a-h, div.manga-info-chapter a");
     for (const element of epiList) {
      const html = await element.content;
      const aEl = await this.querySelector(html, "a");
      if (aEl) {
-      let epUrl = await aEl.getAttributeText("href");
+      let epUrl = await this.getAttributeText(html, "a", "href");
       if (epUrl && !epUrl.startsWith("http")) {
        epUrl = baseUrl + epUrl;
       }
       episodes.push({
-       name: aEl.text.trim(),
+       name: aEl.text ? aEl.text.trim() : "",
        url: epUrl,
       });
      }
@@ -176,9 +161,9 @@ export default class extends Extension {
   }
 
   return {
-   title: title.trim(),
+   title,
    cover,
-   desc: desc.trim(),
+   desc,
    episodes: [
     {
      title: "Chapters",
