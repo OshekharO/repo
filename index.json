@@ -116,7 +116,7 @@
  },
  {
   "author": "appdevelpo",
-  "icon": "https://animepahe.ru/web-app-manifest-512x512.png",
+  "icon": "https://animepahe.ng/wp-content/uploads/2026/04/favicon.png",
   "lang": "en",
   "license": "MIT",
   "name": "Animepahe",
@@ -124,8 +124,8 @@
   "package": "animepahe.ru",
   "type": "bangumi",
   "url": "animepahe.ru.js",
-  "version": "v0.0.3",
-  "webSite": "https://animepahe.ru"
+  "version": "v0.0.4",
+  "webSite": "https://animepahe.ng"
  },
  {
   "author": "Nazz",

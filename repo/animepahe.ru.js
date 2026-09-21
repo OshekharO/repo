@@ -1,130 +1,188 @@
 // ==MiruExtension==
 // @name         Animepahe
-// @version      v0.0.3
+// @version      v0.0.4
 // @author       appdevelpo
 // @lang         en
 // @license      MIT
-// @icon         https://animepahe.ru/web-app-manifest-512x512.png
+// @icon         https://animepahe.ng/wp-content/uploads/2026/04/favicon.png
 // @package      animepahe.ru
 // @type         bangumi
-// @webSite      https://animepahe.ru
+// @webSite      https://animepahe.ng
 // @nsfw         false
 // ==/MiruExtension==
 
 export default class extends Extension {
-  async search(kw) {
-    const res = await this.request(`/api?m=search&q=${kw}`);
-    // console.log(res);
-    return res.data.map((item) => ({
-      title: item.title,
-      url: item.session.toString(),
-      cover: item.poster,
-    }));
+  async req(url) {
+    return this.request(url, {
+      headers: {
+        "Miru-Url": await this.getSetting("animepahe"),
+      },
+    });
+  }
+
+  async load() {
+    this.registerSetting({
+      title: "Animepahe URL",
+      key: "animepahe",
+      type: "input",
+      description: "Homepage URL for Animepahe",
+      defaultValue: "https://animepahe.ng",
+    });
   }
 
   async latest(page) {
-    try {
-      const res = await this.request(`/api?m=airing&page=${page}`);
-      return res.data.map((item) => ({
-        title: item.anime_title,
-        url: item.anime_session.toString(),
-        cover: item.snapshot,
-      }));
-    } catch (e){
-      const bangumi = [{
-        title: "Need to use webview",
-        url: "/",
-        cover: null
-      }];
-      return bangumi;
-    }
+    const res = await this.req(`/latest-releases/page/${page}/`);
+    const latest = await this.querySelectorAll(res, "div.listupd > article.bs");
+
+    return await Promise.all(
+      latest.map(async (element) => {
+        const html = element.content;
+        const [url, title, cover, update] = await Promise.all([
+          this.getAttributeText(html, "div.bsx > a", "href"),
+          this.querySelector(html, "div.tt").text,
+          this.getAttributeText(html, "img", "src"),
+          this.querySelector(html, "span.epx").text,
+        ]);
+
+        return {
+          title: title.trim(),
+          url,
+          cover,
+          update: update ? update.trim() : "",
+        };
+      })
+    );
+  }
+
+  async search(kw, page) {
+    const res = await this.req(`/?s=${encodeURIComponent(kw)}`);
+    const searchList = await this.querySelectorAll(res, "div.listupd > article.bs");
+
+    return await Promise.all(
+      searchList.map(async (element) => {
+        const html = element.content;
+        const [url, title, cover] = await Promise.all([
+          this.getAttributeText(html, "div.bsx > a", "href"),
+          this.querySelector(html, "div.tt").text,
+          this.getAttributeText(html, "img", "src"),
+        ]);
+
+        return {
+          title: title.trim(),
+          url,
+          cover,
+        };
+      })
+    );
   }
 
   async detail(url) {
-
-    // Webview is needed to get the detail page
-    if(url=="/"){
-      return {
-        title: "Use webview",
-        cover: null,
-        desc: "Please use webview to enter the website then close the webview window.",
-      }
-    }
-
     const res = await this.request("", {
       headers: {
-        "Miru-Url": `https://animepahe.ru/anime/${url}`,
+        "Miru-Url": url,
       },
     });
-    // console.log(`https://animepahe.ru/anime/${url}`);
-    const title = await this.querySelector(res,".user-select-none > span").text
-    const cover = res.match(/<a href="(https:\/\/i.animepahe.ru\/posters.+?)"/)[1];
-    const desc = await this.querySelector(res,".anime-synopsis").text
-    // console.log(`/api?m=release&id=${url}`);
-    const epRes = await this.request(`/api?m=release&id=${url}`)
-    // console.log(epRes);
-    const reverse_data = epRes.data.reverse();
+
+    const [title, cover, desc] = await Promise.all([
+      this.querySelector(res, "h1.entry-title").text,
+      this.getAttributeText(res, "div.thumb > img", "src"),
+      this.querySelector(res, "div.entry-content[itemprop='description']").text,
+    ]);
+
+    const epList = await this.querySelectorAll(res, "div.eplister > ul > li");
+
+    const episodes = await Promise.all(
+      epList.map(async (element) => {
+        const html = element.content;
+        const name = await this.querySelector(html, "div.epl-title").text;
+        const episodeUrl = await this.getAttributeText(html, "a", "href");
+        return { name: name.trim(), url: episodeUrl };
+      })
+    );
+
     return {
-      title: title,
-      cover: cover,
-      desc: desc,
-      episodes: [
-        {
-          title: "SubsPlease-360p",
-          urls: reverse_data.map((item) => ({
-            name: `Episode ${item.episode}`,
-            url: `${url}/${item.session};0`,//url;quality
-          })),
-        },
-        {
-          title: "SubsPlease-720p",
-          urls: reverse_data.map((item) => ({
-            name: `Episode ${item.episode}`,
-            url: `${url}/${item.session};1`,
-          })),
-        },
-        {
-          title: "SubsPlease-1080p",
-          urls: reverse_data.map((item) => ({
-            name: `Episode ${item.episode}`,
-            url: `${url}/${item.session};2`,
-          })),
-        },
-      ],
+      title: title.trim(),
+      cover,
+      desc: desc ? desc.trim() : "",
+      episodes: [{ title: "Episodes", urls: episodes }],
     };
   }
 
   async watch(url) {
-    // console.log(url);
-    const url_split = url.split(';');
     const res = await this.request("", {
       headers: {
-        "Miru-Url": `https://animepahe.ru/play/${url_split[0]}`,
+        "Miru-Url": url,
+      },
+    });
+
+    const mirrorOptions = await this.querySelectorAll(res, "select.mirror > option");
+    let iframeSrc = "";
+
+    for (const opt of mirrorOptions) {
+      const val = opt.getAttributeText("value");
+      if (val) {
+        try {
+          const decoded = atob(val);
+          const m = decoded.match(/src=["']([^"']+)["']/i);
+          if (m) {
+            iframeSrc = m[1];
+            break;
+          }
+        } catch (e) {}
       }
-    })
-    // console.log((/data-src="https:\/\/kwik.cx.+?"/g).exec(res)[parseInt(url_split[1])]);
-    // console.log(res.match(/data-src="https:\/\/kwik.cx.+?"/g))
-    // const src_match = res.match(/data-src="https:\/\/kwik.cx.+?"/g)[parseInt(url_split[1])]; //480,720,1080 === [0],[1],[2]
-    // console.log(src_match);
-    console.log(url_split[1]);
-    console.log(res.match(/data-src="(https:\/\/kwik\.si.+?)"/g))
-    const src = res.match(/data-src="(https:\/\/kwik\.si.+?)"/g)[parseInt(url_split[1])].match(/data-src="(.+?)"/)[1];
-      console.log(src);
-    const hid_res = await this.request("", {
+    }
+
+    if (!iframeSrc) {
+      iframeSrc = await this.getAttributeText(res, "div.player-embed > iframe", "src");
+    }
+
+    if (!iframeSrc) {
+      throw new Error("No video player found");
+    }
+
+    if (iframeSrc.startsWith("//")) {
+      iframeSrc = "https:" + iframeSrc;
+    }
+
+    // Check if direct m3u8 in url query param
+    const m3u8Match = iframeSrc.match(/m3u8=([^&]+)/);
+    if (m3u8Match) {
+      return {
+        type: "hls",
+        url: decodeURIComponent(m3u8Match[1]),
+      };
+    }
+
+    const embedRes = await this.request("", {
       headers: {
-        "Miru-Url": src,
-        "Referer": "https://animepahe.com",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36 Edg/107.0.1418.56"
+        "Miru-Url": iframeSrc,
+        "Referer": url,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+
+    const evalMatch = embedRes.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\.split\('\|'\)\)\)/);
+    if (!evalMatch) {
+      const videoSrc = embedRes.match(/<source[^>]+src=["']([^"']+)["']/i);
+      if (videoSrc) {
+        return {
+          type: videoSrc[1].includes(".m3u8") ? "hls" : "mp4",
+          url: videoSrc[1],
+        };
       }
-    })
-    const hid_script = hid_res.match(/eval\(f.+?\}\)\)/g)[1];
-    const decode_script = eval(hid_script.match(/eval(.+)/)[1]);
-    // the obfuscated script look like eval(function(p,a,c,k,e,d){e=function(c){return(c<a?......
-    const decode_url = decode_script.match(/source='(.+?)'/)[1];
+      throw new Error("Failed to extract video stream from embed");
+    }
+
+    const unpacked = eval(evalMatch[0].replace(/^eval/, ""));
+    const fileMatch = unpacked.match(/file:\s*["']([^"']+)["']/);
+    if (!fileMatch) {
+      throw new Error("Failed to find stream URL in unpacked code");
+    }
+
+    const streamUrl = fileMatch[1];
     return {
-      type: "hls",
-      url: decode_url,
+      type: streamUrl.includes(".m3u8") ? "hls" : "mp4",
+      url: streamUrl,
     };
   }
 }
-
