@@ -962,7 +962,7 @@
   "package": "mangadex.org",
   "type": "manga",
   "url": "mangadex.org.js",
-  "version": "v0.0.3",
+  "version": "v0.0.4",
   "webSite": "https://api.mangadex.org"
  },
  {
@@ -976,18 +976,6 @@
   "url": "mangakatana.com.js",
   "version": "v0.0.1",
   "webSite": "https://mangakatana.com/"
- },
- {
-  "author": "OshekharO",
-  "icon": "https://mangakomi.io/wp-content/uploads/2019/12/v-I-BhKu.jpeg",
-  "lang": "en",
-  "license": "MIT",
-  "name": "MangaKomi",
-  "package": "mangakomi",
-  "type": "manga",
-  "url": "mangakomi.js",
-  "version": "v0.0.1",
-  "webSite": "https://mangakomi.io"
  },
  {
   "author": "OshekharO",
