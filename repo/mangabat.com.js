@@ -107,20 +107,23 @@ export default class extends Extension {
         if (cover && cover.startsWith("/")) cover = baseUrl + cover;
 
         const descMatch = res.match(/id="contentBox"[^>]*>([\s\S]+?)<\/div>/i) || res.match(/id="panel-story-info-description"[^>]*>([\s\S]+?)<\/div>/i) || res.match(/class="description"[^>]*>([\s\S]+?)<\/div>/i);
-        let desc = descMatch ? descMatch[1].replace(/<[^>]+>/g, "").trim() : "";
+        let rawDesc = descMatch ? descMatch[1] : "";
+        let desc = rawDesc.replace(/<[^>]+>/g, "").trim();
+        desc = desc.replace(/^[\s\S]*?summary:\s*/i, "");
+        desc = desc
+            .replace(/&quot;/g, '"')
+            .replace(/&#039;/g, "'")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .trim();
 
         let episodes = [];
-        const match = url.match(/\/manga\/([^\/]+)/);
+        const match = url.match(/\/manga\/([^\/\?\#]+)/);
         if (match) {
             const slug = match[1];
             try {
-                const apiUrl = `${baseUrl}/api/manga/${slug}/chapters?limit=10000`;
-                const apiRes = await this.request(apiUrl, {
-                    headers: {
-                        "Referer": baseUrl + "/",
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    },
-                });
+                const apiRes = await this.req(`/api/manga/${slug}/chapters?limit=10000`);
                 const data = typeof apiRes === "string" ? JSON.parse(apiRes) : apiRes;
                 if (data && data.success && data.data && data.data.chapters) {
                     episodes = data.data.chapters.map((c) => {
