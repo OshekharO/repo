@@ -77,14 +77,19 @@ export default class extends Extension {
   }
 
   async watch(url) {
-    const res = await this.request(`${url}`, {
+    const res = await this.request("", {
       headers: {
-        "Miru-Url": "https://vidsrc-api-js-eosin.vercel.app/vidsrc/",
+        "Miru-Url": `https://api.vidlove.cc/movie?id=${url}&mode=json`,
       },
     });
     return {
       type: "hls",
-      url: res.sources[0].url,
+      url: res.source?.url || res.source?.manifest,
+      subtitles: res.subtitles?.map((item) => ({
+        title: item.label,
+        url: item.file,
+        language: item.label,
+      })) || [],
     };
   }
 }
