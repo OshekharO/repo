@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         WTR-LAB
-// @version      v0.0.2
+// @version      v0.0.3
 // @author       OshekharO
 // @lang         en
 // @license      MIT
@@ -160,13 +160,95 @@ export default class extends Extension {
     const chapterObj = res?.chapter || {};
     const title = chapterObj.title || `Chapter ${chapterNo}`;
 
-    let body = res?.data?.data?.body || res?.data?.body || "";
+    let body = res?.data?.data?.content || res?.data?.data?.body || res?.data?.content || res?.data?.body || res?.content || res?.body || "";
+
+    if (typeof body === "string" && /^(arr|str):/.test(body)) {
+      const match = body.match(/^(arr|str):([^:]+):([^:]+):(.+)$/);
+      if (match) {
+        const [, type, ivB64, tagB64, encryptedB64] = match;
+
+        const AES_KEY = "IJAFUUxjM25hyzL2AZrn0wl7cESED6Ru";
+        const keyBytes = new Uint8Array(AES_KEY.length);
+        for (let i = 0; i < AES_KEY.length; i++) {
+          keyBytes[i] = AES_KEY.charCodeAt(i);
+        }
+
+        const base64ToUint8Array = (base64) => {
+          const binaryString = atob(base64.trim());
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          return bytes;
+        };
+
+        const decodeUtf8 = (array) => {
+          if (typeof TextDecoder !== "undefined") {
+            return new TextDecoder().decode(array);
+          }
+          let out = "";
+          let i = 0;
+          while (i < array.length) {
+            let c = array[i++];
+            if (c < 128) {
+              out += String.fromCharCode(c);
+            } else if (c > 191 && c < 224) {
+              out += String.fromCharCode(((c & 31) << 6) | (array[i++] & 63));
+            } else if (c > 223 && c < 240) {
+              out += String.fromCharCode(((c & 15) << 12) | ((array[i++] & 63) << 6) | (array[i++] & 63));
+            } else {
+              const u = (((c & 7) << 18) | ((array[i++] & 63) << 12) | ((array[i++] & 63) << 6) | (array[i++] & 63)) - 0x10000;
+              out += String.fromCharCode(0xd800 + (u >> 10), 0xdc00 + (u & 0x3ff));
+            }
+          }
+          return out;
+        };
+
+        const iv = base64ToUint8Array(ivB64);
+        const tag = base64ToUint8Array(tagB64);
+        const cipherText = base64ToUint8Array(encryptedB64);
+
+        const cipherTextWithTag = new Uint8Array(cipherText.length + tag.length);
+        cipherTextWithTag.set(cipherText, 0);
+        cipherTextWithTag.set(tag, cipherText.length);
+
+        const cryptoKey = await crypto.subtle.importKey(
+          "raw",
+          keyBytes,
+          { name: "AES-GCM" },
+          false,
+          ["decrypt"]
+        );
+
+        const decryptedBuffer = await crypto.subtle.decrypt(
+          {
+            name: "AES-GCM",
+            iv,
+            tagLength: 128,
+          },
+          cryptoKey,
+          cipherTextWithTag
+        );
+
+        const decryptedStr = decodeUtf8(new Uint8Array(decryptedBuffer));
+        body = type === "arr" ? JSON.parse(decryptedStr) : decryptedStr;
+      }
+    }
+
     let contentList = [];
 
     if (Array.isArray(body)) {
-      contentList = body.map((item) => (typeof item === "string" ? item : JSON.stringify(item)));
+      contentList = body.map((item) => {
+        if (typeof item === "string") return item;
+        if (item?.text) return item.text;
+        if (item?.content) return item.content;
+        return JSON.stringify(item);
+      });
     } else if (typeof body === "string" && body.trim().length > 0) {
       contentList = body
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/(?:p|div)>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean);
