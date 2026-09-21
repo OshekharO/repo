@@ -4,16 +4,16 @@
 // @author       appdevelpo
 // @lang         en
 // @license      MIT
-// @icon         https://animepahe.ng/wp-content/uploads/2026/04/favicon.png
+// @icon         https://animepahe.pw/favicon.ico
 // @package      animepahe.ru
 // @type         bangumi
-// @webSite      https://animepahe.ng
+// @webSite      https://animepahe.pw
 // @nsfw         false
 // ==/MiruExtension==
 
 export default class extends Extension {
   async req(url) {
-    const baseUrl = (await this.getSetting("animepahe")) || "https://animepahe.ng";
+    const baseUrl = (await this.getSetting("animepahe")) || "https://animepahe.pw";
     return this.request("", {
       headers: {
         "Miru-Url": `${baseUrl}${url}`,
@@ -26,14 +26,14 @@ export default class extends Extension {
       title: "Animepahe URL",
       key: "animepahe",
       type: "input",
-      description: "Homepage URL for Animepahe (e.g. https://animepahe.ng or https://animepahe.pw)",
-      defaultValue: "https://animepahe.ng",
+      description: "Homepage URL for Animepahe (e.g. https://animepahe.pw or https://animepahe.ng)",
+      defaultValue: "https://animepahe.pw",
     });
   }
 
   async latest(page) {
     try {
-      // Try JSON API first (used by animepahe.pw / animepahe.org)
+      // Try JSON API first (used by animepahe.pw / animepahe.org / animepahe.ru)
       const apiRes = await this.req(`/api?m=airing&page=${page}`);
       try {
         const json = typeof apiRes === "string" ? JSON.parse(apiRes) : apiRes;
