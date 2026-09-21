@@ -31,21 +31,23 @@ export default class extends Extension {
 
     async latest(page) {
         const res = await this.req(`/manga/?page=${page}&order=update`);
-        const latest = await this.querySelectorAll(res, "div.bsx");
+        const bsxList = res.match(/<div class="bsx">([\s\S]+?)<\/div>\s*<\/div>/g) || [];
 
-        let comic = [];
-        for (const element of latest) {
-            const html = await element.content;
-            const url = await this.getAttributeText(html, "a", "href");
-            const titleElement = await this.querySelector(html, "div.tt");
-            const title = titleElement ? titleElement.text : await this.getAttributeText(html, "a", "title");
-            const cover = await this.querySelector(html, "img").getAttributeText("src");
+        const comic = [];
+        for (const item of bsxList) {
+            const urlMatch = item.match(/href="([^"]+)"/);
+            const titleMatch = item.match(/<div class="tt">[\s\S]*?([^\s<][^<]*[^\s<])/) || item.match(/title="([^"]+)"/);
+            const coverMatch = item.match(/src="([^"]+)"/);
+
+            const url = urlMatch ? urlMatch[1] : "";
+            const title = titleMatch ? titleMatch[1].replace(/&#8217;/g, "'").trim() : "";
+            const cover = coverMatch ? coverMatch[1] : "";
 
             if (url && title) {
                 comic.push({
-                    title: title.trim(),
+                    title,
                     url,
-                    cover: cover || ""
+                    cover,
                 });
             }
         }
@@ -54,19 +56,26 @@ export default class extends Extension {
 
     async search(kw, page) {
         const res = await this.req(`/page/${page}/?s=${kw}`);
-        const searchList = await this.querySelectorAll(res, "div.bsx");
-        const result = await Promise.all(searchList.map(async (element) => {
-            const html = await element.content;
-            const url = await this.getAttributeText(html, "a", "href");
-            const titleElement = await this.querySelector(html, "div.tt");
-            const title = titleElement ? titleElement.text : await this.getAttributeText(html, "a", "title");
-            const cover = await this.querySelector(html, "img").getAttributeText("src");
-            return {
-                title: title ? title.trim() : "",
-                url,
-                cover: cover || ""
-            };
-        }));
+        const bsxList = res.match(/<div class="bsx">([\s\S]+?)<\/div>\s*<\/div>/g) || [];
+
+        const result = [];
+        for (const item of bsxList) {
+            const urlMatch = item.match(/href="([^"]+)"/);
+            const titleMatch = item.match(/<div class="tt">[\s\S]*?([^\s<][^<]*[^\s<])/) || item.match(/title="([^"]+)"/);
+            const coverMatch = item.match(/src="([^"]+)"/);
+
+            const url = urlMatch ? urlMatch[1] : "";
+            const title = titleMatch ? titleMatch[1].replace(/&#8217;/g, "'").trim() : "";
+            const cover = coverMatch ? coverMatch[1] : "";
+
+            if (url && title) {
+                result.push({
+                    title,
+                    url,
+                    cover,
+                });
+            }
+        }
         return result;
     }
 
@@ -77,37 +86,30 @@ export default class extends Extension {
             },
         });
 
-        const titleElement = await this.querySelector(res, "h1.entry-title");
-        const title = titleElement ? titleElement.text : (await this.querySelector(res, "div.infox > h1")).text;
+        const titleMatch = res.match(/<h1[^>]*class="entry-title"[^>]*>([\s\S]+?)<\/h1>/i) || res.match(/class="infox"[\s\S]*?<h1[^>]*>([\s\S]+?)<\/h1>/i);
+        const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, "").replace(/&#8217;/g, "'").trim() : "Unknown Title";
 
-        let cover = "";
-        const coverElem = await this.querySelector(res, "img.wp-post-image");
-        if (coverElem) {
-            cover = await coverElem.getAttributeText("src");
-        }
+        const coverMatch = res.match(/<img[^>]*class="[^"]*wp-post-image[^"]*"[^>]*src="([^"]+)"/i) || res.match(/<div class="thumb">[\s\S]*?<img[^>]*src="([^"]+)"/i);
+        const cover = coverMatch ? coverMatch[1] : "";
 
-        let desc = "";
-        const descElem = await this.querySelector(res, "div.entry-content[itemprop='description'], div.entry-content, div.entry-content-single");
-        if (descElem) {
-            desc = descElem.text;
-        }
+        const descMatch = res.match(/<div[^>]*class="entry-content[^"]*"[^>]*>([\s\S]+?)<\/div>/i);
+        const desc = descMatch ? descMatch[1].replace(/<[^>]+>/g, "").trim() : "";
 
-        const epiList = await this.querySelectorAll(res, "div.eplister > ul > li, div#chapterlist > ul > li");
-        const episodes = await Promise.all(epiList.map(async (element) => {
-            const html = await element.content;
-            const nameElem = await this.querySelector(html, "span.chapternum");
-            const name = nameElem ? nameElem.text : "";
-            const url = await this.getAttributeText(html, "a", "href");
+        const chMatches = [...res.matchAll(/<li[^>]*data-num="([^"]*)"[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>[\s\S]*?<span[^>]*class="chapternum"[^>]*>([\s\S]+?)<\/span>/gi)];
+
+        const episodes = chMatches.map((m) => {
+            const chUrl = m[2];
+            const chName = m[3].replace(/<[^>]+>/g, "").trim();
             return {
-                name: name ? name.trim() : "Chapter",
-                url: url,
+                name: chName || `Chapter ${m[1]}`,
+                url: chUrl,
             };
-        }));
+        });
 
         return {
-            title: title ? title.trim() : "Unknown Title",
-            cover: cover || "",
-            desc: desc ? desc.trim() : "",
+            title,
+            cover,
+            desc,
             episodes: [
                 {
                     title: "Chapters",
@@ -132,8 +134,7 @@ export default class extends Extension {
 
         const imagesContent = match[1];
 
-        const imageUrls = imagesContent
-            .match(/"([^"]+)"/g)
+        const imageUrls = (imagesContent.match(/"([^"]+)"/g) || [])
             .map(m => m.slice(1, -1).replace(/\\/g, ''));
 
         return { urls: imageUrls };
