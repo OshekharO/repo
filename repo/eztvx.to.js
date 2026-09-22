@@ -34,24 +34,87 @@ export default class extends Extension {
     return item.magnet_url || "";
   }
 
+  cleanShowTitle(title) {
+    if (!title) return "";
+    let clean = title.replace(/S\d+E\d+[\s\S]*/i, "");
+    clean = clean.replace(/\b(1080p|720p|480p|HDTV|WEB-DL|WEB|AAC2|H264|H\.264|x264|x265|HEVC|REPACK|EZTV|DARKFLiX|MeGusta|RMTeam)\b.*/gi, "");
+    clean = clean.replace(/[\.\_]/g, " ").trim();
+    return clean;
+  }
+
+  async getMetadata(imdbId, rawTitle) {
+    let cover = "";
+    let desc = "";
+
+    if (imdbId && imdbId !== "0") {
+      try {
+        const fullImdb = imdbId.startsWith("tt") ? imdbId : `tt${imdbId}`;
+        const res = await this.request("", {
+          headers: {
+            "Miru-Url": `https://api.tvmaze.com/lookup/shows?imdb=${fullImdb}`,
+          },
+        });
+        if (res) {
+          if (res.image) {
+            cover = res.image.medium || res.image.original || "";
+          }
+          if (res.summary) {
+            desc = res.summary.replace(/<[^>]*>/g, "").trim();
+          }
+        }
+      } catch (e) {
+        // Fallback to title lookup if IMDB lookup fails
+      }
+    }
+
+    if (!cover || !desc) {
+      const showTitle = this.cleanShowTitle(rawTitle);
+      if (showTitle) {
+        try {
+          const res = await this.request("", {
+            headers: {
+              "Miru-Url": `https://api.tvmaze.com/singlesearch/shows?q=${encodeURIComponent(showTitle)}`,
+            },
+          });
+          if (res) {
+            if (!cover && res.image) {
+              cover = res.image.medium || res.image.original || "";
+            }
+            if (!desc && res.summary) {
+              desc = res.summary.replace(/<[^>]*>/g, "").trim();
+            }
+          }
+        } catch (e) {
+          // Ignore API lookup errors
+        }
+      }
+    }
+
+    return { cover, desc };
+  }
+
   async latest(page) {
     const res = await this.request(`/api/get-torrents?limit=30&page=${page}`);
     if (!res || !res.torrents) return [];
+
     return res.torrents.map((item) => {
       const sizeStr = this.formatSize(item.size_bytes);
       const updateText = `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`;
+
+      let cover = item.large_screenshot
+        ? item.large_screenshot.startsWith("//")
+          ? "https:" + item.large_screenshot
+          : item.large_screenshot
+        : item.small_screenshot
+        ? item.small_screenshot.startsWith("//")
+          ? "https:" + item.small_screenshot
+          : item.small_screenshot
+        : "";
+
       return {
         title: item.title || item.filename,
         url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
-        cover: item.large_screenshot
-          ? item.large_screenshot.startsWith("//")
-            ? "https:" + item.large_screenshot
-            : item.large_screenshot
-          : item.small_screenshot
-          ? item.small_screenshot.startsWith("//")
-            ? "https:" + item.small_screenshot
-            : item.small_screenshot
-          : "",
+        cover: cover,
         update: updateText,
       };
     });
@@ -63,16 +126,23 @@ export default class extends Extension {
       const imdbId = cleanKw.replace(/^tt/i, "");
       const res = await this.request(`/api/get-torrents?imdb_id=${imdbId}&page=${page}`);
       if (!res || !res.torrents) return [];
+
       return res.torrents.map((item) => {
         const sizeStr = this.formatSize(item.size_bytes);
+        let cover = item.large_screenshot
+          ? item.large_screenshot.startsWith("//")
+            ? "https:" + item.large_screenshot
+            : item.large_screenshot
+          : item.small_screenshot
+          ? item.small_screenshot.startsWith("//")
+            ? "https:" + item.small_screenshot
+            : item.small_screenshot
+          : "";
+
         return {
           title: item.title || item.filename,
           url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
-          cover: item.large_screenshot
-            ? item.large_screenshot.startsWith("//")
-              ? "https:" + item.large_screenshot
-              : item.large_screenshot
-            : "",
+          cover: cover,
           update: `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`,
         };
       });
@@ -89,14 +159,20 @@ export default class extends Extension {
 
     return filtered.map((item) => {
       const sizeStr = this.formatSize(item.size_bytes);
+      let cover = item.large_screenshot
+        ? item.large_screenshot.startsWith("//")
+          ? "https:" + item.large_screenshot
+          : item.large_screenshot
+        : item.small_screenshot
+        ? item.small_screenshot.startsWith("//")
+          ? "https:" + item.small_screenshot
+          : item.small_screenshot
+        : "";
+
       return {
         title: item.title || item.filename,
         url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
-        cover: item.large_screenshot
-          ? item.large_screenshot.startsWith("//")
-            ? "https:" + item.large_screenshot
-            : item.large_screenshot
-          : "",
+        cover: cover,
         update: `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`,
       };
     });
@@ -130,8 +206,10 @@ export default class extends Extension {
     }
 
     const firstItem = torrents[0];
-    const mainTitle = firstItem.title || firstItem.filename;
-    const cover = firstItem.large_screenshot
+    const rawTitle = firstItem.title || firstItem.filename;
+    const cleanTitle = this.cleanShowTitle(rawTitle);
+
+    let cover = firstItem.large_screenshot
       ? firstItem.large_screenshot.startsWith("//")
         ? "https:" + firstItem.large_screenshot
         : firstItem.large_screenshot
@@ -141,13 +219,19 @@ export default class extends Extension {
         : firstItem.small_screenshot
       : "";
 
+    const meta = await this.getMetadata(firstItem.imdb_id, rawTitle);
+    if (!cover && meta.cover) {
+      cover = meta.cover;
+    }
+    const desc = meta.desc || (firstItem.imdb_id && firstItem.imdb_id !== "0" ? `IMDB ID: ${firstItem.imdb_id}` : "");
+
     if (torrents.length === 1) {
       const item = torrents[0];
       const sizeStr = this.formatSize(item.size_bytes);
       return {
-        title: mainTitle,
+        title: cleanTitle || rawTitle,
         cover,
-        desc: `Released: ${new Date(item.date_released_unix * 1000).toLocaleDateString()}`,
+        desc: desc || `Released: ${new Date(item.date_released_unix * 1000).toLocaleDateString()}`,
         episodes: [
           {
             title: "Torrents",
@@ -182,9 +266,9 @@ export default class extends Extension {
     }));
 
     return {
-      title: mainTitle,
+      title: cleanTitle || rawTitle,
       cover,
-      desc: `IMDB ID: ${firstItem.imdb_id}`,
+      desc,
       episodes,
     };
   }
