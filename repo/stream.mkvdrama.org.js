@@ -279,6 +279,11 @@ export default class extends Extension {
           }
         } catch (e) {}
       }
+
+      if (iframeSrc.startsWith("http")) {
+        directUrl = iframeSrc;
+        break;
+      }
     }
 
     // 2. Try doo_player_ajax API if directUrl not found from static iframe
@@ -332,11 +337,16 @@ export default class extends Extension {
       }
     }
 
+    // 4. Absolute fallback to pageUrl
+    if (!directUrl) {
+      directUrl = pageUrl;
+    }
+
     const isHls = directUrl.includes(".m3u8");
 
     return {
       type: isHls ? "hls" : "mp4",
-      url: directUrl || "",
+      url: directUrl,
       headers: {
         Referer: "https://kisskh.top/",
         "User-Agent":
