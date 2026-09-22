@@ -239,8 +239,8 @@ export default class extends Extension {
     for (const match of iframeMatches) {
       const iframeSrc = match[1];
 
-      // Check jwplayer source param
-      const sourceMatch = iframeSrc.match(/jwplayer\/\?source=([^&"'\s>]+)/i);
+      // Check jwplayer source param in iframe
+      const sourceMatch = iframeSrc.match(/source=([^&"'\s>]+)/i);
       if (sourceMatch) {
         try {
           directUrl = decodeURIComponent(sourceMatch[1]);
@@ -249,6 +249,17 @@ export default class extends Extension {
           directUrl = sourceMatch[1];
           break;
         }
+      }
+
+      // If iframe points to YouTube
+      if (iframeSrc.includes("youtube.com/embed/") || iframeSrc.includes("youtu.be/")) {
+        const ytIdMatch = iframeSrc.match(/embed\/([^?&"'\s>]+)/);
+        if (ytIdMatch) {
+          directUrl = `https://www.youtube.com/watch?v=${ytIdMatch[1]}`;
+          break;
+        }
+        directUrl = iframeSrc;
+        break;
       }
 
       // If iframe points to jwplayer or embed, fetch iframe content
@@ -268,6 +279,11 @@ export default class extends Extension {
           }
         } catch (e) {}
       }
+
+      if (iframeSrc.startsWith("http")) {
+        directUrl = iframeSrc;
+        break;
+      }
     }
 
     // 2. Direct regex match fallback on page source for m3u8 or mp4
@@ -278,11 +294,16 @@ export default class extends Extension {
       }
     }
 
+    // 3. Absolute fallback to pageUrl so Miru doesn't get an empty URL string
+    if (!directUrl) {
+      directUrl = pageUrl;
+    }
+
     const isHls = directUrl.includes(".m3u8");
 
     return {
       type: isHls ? "hls" : "mp4",
-      url: directUrl || "",
+      url: directUrl,
       headers: {
         Referer: "https://kisskh.top/",
         "User-Agent":
