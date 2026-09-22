@@ -13,13 +13,19 @@
 
 export default class extends Extension {
   async req(path) {
-    let cleanPath = path.replace("https://en.taotu.org", "").replace(/\/m(\/|$)/g, "/");
+    let cleanPath = path
+      .replace("https://taotu.org", "")
+      .replace("https://en.taotu.org", "")
+      .replace(/\/m(\/|$)/g, "/");
     if (!cleanPath.startsWith("/")) {
       cleanPath = "/" + cleanPath;
     }
     return await this.request("", {
       headers: {
         "Miru-Url": `https://en.taotu.org${cleanPath}`,
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Referer: "https://en.taotu.org/",
       },
     });
   }
@@ -35,7 +41,7 @@ export default class extends Extension {
       let url = await this.getAttributeText(html, "a", "href");
       const cover = await this.getAttributeText(html, "img", "src");
       if (url) {
-        url = url.replace(/\/m(\/|$)/g, "/");
+        url = url.replace("https://taotu.org", "").replace("https://en.taotu.org", "").replace(/\/m(\/|$)/g, "/");
       }
       if (url && cover) {
         mangas.push({
@@ -59,7 +65,7 @@ export default class extends Extension {
       let url = await this.getAttributeText(html, "a", "href");
       const cover = await this.getAttributeText(html, "img", "src");
       if (url) {
-        url = url.replace(/\/m(\/|$)/g, "/");
+        url = url.replace("https://taotu.org", "").replace("https://en.taotu.org", "").replace(/\/m(\/|$)/g, "/");
       }
       if (url && cover) {
         mangas.push({
@@ -80,7 +86,7 @@ export default class extends Extension {
     const descEl = await this.querySelector(res, "meta[name='description']");
     const desc = descEl ? await this.getAttributeText(res, "meta[name='description']", "content") : "";
 
-    const cleanUrl = url.replace(/\/m(\/|$)/g, "/");
+    const cleanUrl = url.replace("https://taotu.org", "").replace("https://en.taotu.org", "").replace(/\/m(\/|$)/g, "/");
 
     return {
       title,
