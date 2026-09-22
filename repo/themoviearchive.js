@@ -54,17 +54,19 @@ export default class extends Extension {
       });
 
       if (streamRes && Array.isArray(streamRes.downloads)) {
-        episodeUrls = streamRes.downloads.map((dl) => {
-          const server = dl.server || dl.source || "Server";
-          const parts = [server];
-          if (dl.quality) parts.push(`${dl.quality}p`);
-          if (dl.size) parts.push(`(${dl.size})`);
+        episodeUrls = streamRes.downloads
+          .filter((dl) => dl && dl.url)
+          .map((dl) => {
+            const server = dl.server || dl.source || "Server";
+            const parts = [server];
+            if (dl.quality) parts.push(`${dl.quality}p`);
+            if (dl.size) parts.push(`(${dl.size})`);
 
-          return {
-            name: parts.join(" - "),
-            url: dl.url,
-          };
-        });
+            return {
+              name: parts.join(" - "),
+              url: dl.url,
+            };
+          });
       }
     } catch (e) {
       console.log(e);
@@ -112,32 +114,47 @@ export default class extends Extension {
     if (url.startsWith("http://") || url.startsWith("https://")) {
       let finalUrl = url;
 
-      if (!url.includes("googleusercontent.com") && !url.endsWith(".m3u8") && !url.endsWith(".mp4") && !url.endsWith(".mkv")) {
+      const isDirectMedia =
+        url.includes("googleusercontent.com") ||
+        url.includes("workers.dev") ||
+        url.includes("hubcloud") ||
+        url.includes("busycdn") ||
+        url.endsWith(".m3u8") ||
+        url.endsWith(".mp4") ||
+        url.endsWith(".mkv");
+
+      if (!isDirectMedia) {
         let currentUrl = url;
+        let referer = url;
+
         for (let i = 0; i < 4; i++) {
           try {
             const res = await this.request("", {
               headers: {
                 "Miru-Url": currentUrl,
                 "User-Agent": userAgent,
+                "Referer": referer,
               },
             });
 
             if (typeof res === "string") {
-              const directMatch = res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud|googleusercontent\.com)[^\s"'<>]*/i) ||
-                                  res.match(/https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4|mkv)(?:\?[^\s"'<>]*)?/i);
+              const directMatch =
+                res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud|googleusercontent\.com)[^\s"'<>]*/i) ||
+                res.match(/https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4|mkv)(?:\?[^\s"'<>]*)?/i);
+
               if (directMatch) {
                 finalUrl = directMatch[0];
                 break;
               }
 
-              const redirectMatch = res.match(/https?:\/\/[^\s"'<>]*(?:gdflix|fastdlserver)[^\s"'<>]*/i) ||
-                                    res.match(/href=["'](https?:\/\/[^"']+)["']/i);
-              if (redirectMatch && redirectMatch[1] && redirectMatch[1] !== currentUrl) {
-                currentUrl = redirectMatch[1];
-                finalUrl = currentUrl;
-              } else if (redirectMatch && redirectMatch[0] !== currentUrl) {
-                currentUrl = redirectMatch[0];
+              const redirectMatch =
+                res.match(/https?:\/\/[^\s"'<>]*(?:gdflix|fastdl)[^\s"'<>]*/i) ||
+                res.match(/href=["'](https?:\/\/[^"']+)["']/i);
+
+              const nextUrl = redirectMatch ? (redirectMatch[1] || redirectMatch[0]) : null;
+              if (nextUrl && nextUrl !== currentUrl) {
+                referer = currentUrl;
+                currentUrl = nextUrl;
                 finalUrl = currentUrl;
               } else {
                 break;
