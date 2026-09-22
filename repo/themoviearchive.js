@@ -77,14 +77,23 @@ export default class extends Extension {
   }
 
   async watch(url) {
-    const res = await this.request(`${url}`, {
+    const res = await this.request("", {
       headers: {
-        "Miru-Url": "https://vidsrc-api-js-eosin.vercel.app/vidsrc/",
+        "Miru-Url": `https://streamrip.fun/api/download/movie/${url}`,
       },
     });
+
+    const download = res?.downloads?.[0];
+    if (!download || !download.url) {
+      return {
+        type: "mp4",
+        url: "",
+      };
+    }
+
     return {
-      type: "hls",
-      url: res.sources[0].url,
+      type: download.url.includes(".m3u8") ? "hls" : "mp4",
+      url: download.url,
     };
   }
 }
