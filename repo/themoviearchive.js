@@ -169,15 +169,15 @@ export default class extends Extension {
         }
       }
 
-      const parsedUrl = new URL(finalUrl);
-      const origin = `${parsedUrl.protocol}//${parsedUrl.hostname}`;
+      const originMatch = finalUrl.match(/^(https?:\/\/[^\/]+)/i);
+      const origin = originMatch ? originMatch[1] : "";
 
       return {
         type: finalUrl.includes(".m3u8") ? "hls" : "mp4",
         url: finalUrl,
         headers: {
           "User-Agent": userAgent,
-          "Referer": origin + "/",
+          "Referer": origin ? origin + "/" : "",
           "Origin": origin,
         },
       };
