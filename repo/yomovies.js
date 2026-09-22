@@ -89,7 +89,16 @@ export default class extends Extension {
       const title = await this.querySelector(res, "meta[property='og:title']").getAttributeText("content");
       const cover = await this.querySelector(res, "img[itemprop='image']").getAttributeText("src");
       const desc = await this.querySelector(res, "p.f-desc").text;
-      const episodeUrl = res.match(/https:\/\/(?:minoplres|speedostream[0-9]*)\.[^\s'"]+/);
+
+      const matchedUrls = res.match(/https:\/\/(?:minoplres|speedostream[0-9]*)\.[^\s'"]+(?:embed-[^\s'"]+|\.html)/g) || [];
+      let episodeUrl = "";
+      for (let u of matchedUrls) {
+        if (!/\/embed-[a-zA-Z0-9]+/.test(u)) {
+          u = u.replace(/\/([a-zA-Z0-9]+)\.html$/, "/embed-$1.html");
+        }
+        episodeUrl = u;
+        break;
+      }
 
       return {
         title: title.trim(),
@@ -101,7 +110,7 @@ export default class extends Extension {
             urls: [
               {
                 name: title.trim(),
-                url: episodeUrl ? episodeUrl[0] : "",
+                url: episodeUrl,
               },
             ],
           },
@@ -118,20 +127,22 @@ export default class extends Extension {
 
   async watch(url) {
     let directUrl = "";
-    try {
-      const res = await this.request("", {
-        headers: {
-          "Miru-Url": url,
-          Referer: "https://yomovies.church/",
-        },
-      });
+    if (url) {
+      try {
+        const res = await this.request("", {
+          headers: {
+            "Miru-Url": url,
+            Referer: "https://yomovies.church/",
+          },
+        });
 
-      const directUrlMatch = res.match(/https:\/\/[^\s'"]+\.(?:mp4|m3u8)[^\s'"]*/);
-      if (directUrlMatch) {
-        directUrl = directUrlMatch[0];
+        const directUrlMatch = res.match(/https:\/\/[^\s'"]+\.(?:mp4|m3u8)[^\s'"]*/);
+        if (directUrlMatch) {
+          directUrl = directUrlMatch[0];
+        }
+      } catch (e) {
+        // Catch network/SSL HandshakeExceptions (e.g. CERTIFICATE_VERIFY_FAILED from Cloudflare protection)
       }
-    } catch (e) {
-      // Catch network/SSL HandshakeExceptions (e.g. CERTIFICATE_VERIFY_FAILED from Cloudflare protection)
     }
 
     return {
@@ -139,7 +150,7 @@ export default class extends Extension {
       url: directUrl,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.142.86 Safari/537.36",
-        referer: directUrl || "https://yomovies.church/",
+        referer: "https://speedostream1.com/",
       },
     };
   }
