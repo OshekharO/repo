@@ -114,7 +114,7 @@ export default class extends Extension {
 
       if (!url.includes("googleusercontent.com") && !url.endsWith(".m3u8") && !url.endsWith(".mp4") && !url.endsWith(".mkv")) {
         let currentUrl = url;
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 4; i++) {
           try {
             const res = await this.request("", {
               headers: {
@@ -124,14 +124,21 @@ export default class extends Extension {
             });
 
             if (typeof res === "string") {
-              const match = res.match(/https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4|mkv)(?:\?[^\s"'<>]*)?/i) ||
-                            res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud|googleusercontent\.com|gdflix|fastdl)[^\s"'<>]*/i);
-              if (match && match[0] !== currentUrl) {
-                currentUrl = match[0];
+              const directMatch = res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud|googleusercontent\.com)[^\s"'<>]*/i) ||
+                                  res.match(/https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4|mkv)(?:\?[^\s"'<>]*)?/i);
+              if (directMatch) {
+                finalUrl = directMatch[0];
+                break;
+              }
+
+              const redirectMatch = res.match(/https?:\/\/[^\s"'<>]*(?:gdflix|fastdlserver)[^\s"'<>]*/i) ||
+                                    res.match(/href=["'](https?:\/\/[^"']+)["']/i);
+              if (redirectMatch && redirectMatch[1] && redirectMatch[1] !== currentUrl) {
+                currentUrl = redirectMatch[1];
                 finalUrl = currentUrl;
-                if (finalUrl.includes(".m3u8") || finalUrl.includes(".mp4") || finalUrl.includes(".mkv") || finalUrl.includes("googleusercontent.com") || finalUrl.includes("busycdn")) {
-                  break;
-                }
+              } else if (redirectMatch && redirectMatch[0] !== currentUrl) {
+                currentUrl = redirectMatch[0];
+                finalUrl = currentUrl;
               } else {
                 break;
               }
