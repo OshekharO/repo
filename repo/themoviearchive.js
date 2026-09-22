@@ -169,11 +169,16 @@ export default class extends Extension {
         }
       }
 
+      const parsedUrl = new URL(finalUrl);
+      const origin = `${parsedUrl.protocol}//${parsedUrl.hostname}`;
+
       return {
         type: finalUrl.includes(".m3u8") ? "hls" : "mp4",
         url: finalUrl,
         headers: {
           "User-Agent": userAgent,
+          "Referer": origin + "/",
+          "Origin": origin,
         },
       };
     }
