@@ -83,17 +83,23 @@ export default class extends Extension {
       },
     });
 
-    const download = res?.downloads?.[0];
-    if (!download || !download.url) {
-      return {
-        type: "mp4",
-        url: "",
-      };
-    }
+    const downloads = res?.downloads || [];
+    const validDownload = downloads.find((item) => {
+      if (!item || !item.url) return false;
+      const server = (item.server || "").toLowerCase();
+      const source = (item.source || "").toLowerCase();
+      if (server.includes("uhdmovies") || source.includes("uhdmovies") || server.includes("instantdl") || server.includes("resumecloud")) {
+        return false;
+      }
+      const cleanUrl = item.url.split("?")[0].toLowerCase();
+      return cleanUrl.endsWith(".m3u8") || cleanUrl.endsWith(".mkv") || cleanUrl.endsWith(".mp4") || cleanUrl.includes(".m3u8") || cleanUrl.includes(".mkv") || cleanUrl.includes(".mp4");
+    });
+
+    const downloadUrl = validDownload ? validDownload.url : downloads[0]?.url || "";
 
     return {
-      type: download.url.includes(".m3u8") ? "hls" : "mp4",
-      url: download.url,
+      type: downloadUrl.includes(".m3u8") ? "hls" : "mp4",
+      url: downloadUrl,
     };
   }
 }
