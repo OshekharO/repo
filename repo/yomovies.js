@@ -1,34 +1,44 @@
 // ==MiruExtension==
 // @name         YoMovies
-// @version      v0.0.7
+// @version      v0.0.8
 // @author       OshekharO
 // @lang         hi
 // @license      MIT
 // @package      yomovies
 // @type         bangumi
 // @icon         https://dl.memuplay.com/new_market/img/com.wYoMovies_7822289.sc1.2024-05-21-17-59-43.jpg
-// @webSite      https://yomovies.boats
+// @webSite      https://yomovies.church
 // @nsfw         false
 // ==/MiruExtension==
 
 export default class extends Extension {
-  async latest() {
-    const res = await this.request("/");
-    const bsxList = await this.querySelectorAll(res, "div.ml-item");
-    const novel = [];
-    for (const element of bsxList) {
-      const html = await element.content;
-      const url = await this.getAttributeText(html, "a", "href");
-      const title = await this.querySelector(html, "div.qtip-title").text;
-      const cover = await this.querySelector(html, "img").getAttributeText("data-original");
+  async latest(page) {
+    try {
+      const res = await this.request(`/?page=${page}`);
+      const bsxList = await this.querySelectorAll(res, "div.ml-item");
+      const novel = [];
+      for (const element of bsxList) {
+        const html = await element.content;
+        const url = await this.getAttributeText(html, "a", "href");
+        const title = await this.querySelector(html, "div.qtip-title").text;
+        const cover = await this.querySelector(html, "img").getAttributeText("data-original");
 
-      novel.push({
-        title: title.trim(),
-        url,
-        cover,
-      });
+        novel.push({
+          title: title.trim(),
+          url,
+          cover,
+        });
+      }
+      return novel;
+    } catch (e) {
+      return [
+        {
+          title: "Need to use webview",
+          url: "/",
+          cover: null,
+        },
+      ];
     }
-    return novel;
   }
 
   async search(kw) {
@@ -51,6 +61,14 @@ export default class extends Extension {
   }
 
   async detail(url) {
+    if (url === "/") {
+      return {
+        title: "Use webview",
+        cover: null,
+        desc: "Please use webview to enter the website then close the webview window.",
+      };
+    }
+
     const res = await this.request("", {
       headers: {
         "Miru-Url": url,
