@@ -42,22 +42,32 @@ export default class extends Extension {
   }
 
   async search(kw) {
-    const res = await this.request(`/?s=${kw}`);
-    const bsxList = await this.querySelectorAll(res, "div.ml-item");
-    const novel = [];
+    try {
+      const res = await this.request(`/?s=${kw}`);
+      const bsxList = await this.querySelectorAll(res, "div.ml-item");
+      const novel = [];
 
-    for (const element of bsxList) {
-      const html = await element.content;
-      const url = await this.getAttributeText(html, "a", "href");
-      const title = await this.querySelector(html, "div.qtip-title").text;
-      const cover = await this.querySelector(html, "img").getAttributeText("data-original");
-      novel.push({
-        title: title.trim(),
-        url,
-        cover,
-      });
+      for (const element of bsxList) {
+        const html = await element.content;
+        const url = await this.getAttributeText(html, "a", "href");
+        const title = await this.querySelector(html, "div.qtip-title").text;
+        const cover = await this.querySelector(html, "img").getAttributeText("data-original");
+        novel.push({
+          title: title.trim(),
+          url,
+          cover,
+        });
+      }
+      return novel;
+    } catch (e) {
+      return [
+        {
+          title: "Need to use webview",
+          url: "/",
+          cover: null,
+        },
+      ];
     }
-    return novel;
   }
 
   async detail(url) {
@@ -69,33 +79,41 @@ export default class extends Extension {
       };
     }
 
-    const res = await this.request("", {
-      headers: {
-        "Miru-Url": url,
-      },
-    });
-
-    const title = await this.querySelector(res, "meta[property='og:title']").getAttributeText("content");
-    const cover = await this.querySelector(res, "img[itemprop='image']").getAttributeText("src");
-    const desc = await this.querySelector(res, "p.f-desc").text;
-    const episodeUrl = res.match(/https:\/\/(?:minoplres|speedostream[0-9]*)\.[^\s'"]+/);
-
-    return {
-      title: title.trim(),
-      cover,
-      desc,
-      episodes: [
-        {
-          title: "Directory",
-          urls: [
-            {
-              name: title.trim(),
-              url: episodeUrl ? episodeUrl[0] : "",
-            },
-          ],
+    try {
+      const res = await this.request("", {
+        headers: {
+          "Miru-Url": url,
         },
-      ],
-    };
+      });
+
+      const title = await this.querySelector(res, "meta[property='og:title']").getAttributeText("content");
+      const cover = await this.querySelector(res, "img[itemprop='image']").getAttributeText("src");
+      const desc = await this.querySelector(res, "p.f-desc").text;
+      const episodeUrl = res.match(/https:\/\/(?:minoplres|speedostream[0-9]*)\.[^\s'"]+/);
+
+      return {
+        title: title.trim(),
+        cover,
+        desc,
+        episodes: [
+          {
+            title: "Directory",
+            urls: [
+              {
+                name: title.trim(),
+                url: episodeUrl ? episodeUrl[0] : "",
+              },
+            ],
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        title: "Use webview",
+        cover: null,
+        desc: "Please use webview to enter the website then close the webview window.",
+      };
+    }
   }
 
   async watch(url) {
