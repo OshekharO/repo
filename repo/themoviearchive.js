@@ -119,9 +119,12 @@ export default class extends Extension {
         url.includes("workers.dev") ||
         url.includes("hubcloud") ||
         url.includes("busycdn") ||
-        url.endsWith(".m3u8") ||
-        url.endsWith(".mp4") ||
-        url.endsWith(".mkv");
+        url.includes("nebula.to") ||
+        url.includes("jabroni.mov") ||
+        url.includes("wootly") ||
+        url.includes(".m3u8") ||
+        url.includes(".mp4") ||
+        url.includes(".mkv");
 
       if (!isDirectMedia) {
         let currentUrl = url;
@@ -139,7 +142,7 @@ export default class extends Extension {
 
             if (typeof res === "string") {
               const directMatch =
-                res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud|googleusercontent\.com)[^\s"'<>]*/i) ||
+                res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud|googleusercontent\.com|nebula\.to|jabroni\.mov|wootly)[^\s"'<>]*/i) ||
                 res.match(/https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4|mkv)(?:\?[^\s"'<>]*)?/i);
 
               if (directMatch) {
@@ -170,14 +173,20 @@ export default class extends Extension {
       }
 
       const originMatch = finalUrl.match(/^(https?:\/\/[^\/]+)/i);
-      const origin = originMatch ? originMatch[1] : "";
+      let origin = originMatch ? originMatch[1] : "";
+      let referer = origin ? origin + "/" : "";
+
+      if (finalUrl.includes("nebula.to") || finalUrl.includes("jabroni.mov") || finalUrl.includes("wootly") || finalUrl.includes("goojara")) {
+        referer = "https://ww1.goojara.to/";
+        origin = "https://ww1.goojara.to";
+      }
 
       return {
         type: finalUrl.includes(".m3u8") ? "hls" : "mp4",
         url: finalUrl,
         headers: {
           "User-Agent": userAgent,
-          "Referer": origin ? origin + "/" : "",
+          "Referer": referer,
           "Origin": origin,
         },
       };
