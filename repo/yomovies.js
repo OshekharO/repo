@@ -117,22 +117,29 @@ export default class extends Extension {
   }
 
   async watch(url) {
-    const res = await this.request("", {
-      headers: {
-        "Miru-Url": url,
-        Referer: "https://yomovies.church/",
-      },
-    });
+    let directUrl = "";
+    try {
+      const res = await this.request("", {
+        headers: {
+          "Miru-Url": url,
+          Referer: "https://yomovies.church/",
+        },
+      });
 
-    const directUrlMatch = res.match(/https:\/\/[^\s'"]+\.(?:mp4|m3u8)[^\s'"]*/);
-    const directUrl = directUrlMatch ? directUrlMatch[0] : "";
+      const directUrlMatch = res.match(/https:\/\/[^\s'"]+\.(?:mp4|m3u8)[^\s'"]*/);
+      if (directUrlMatch) {
+        directUrl = directUrlMatch[0];
+      }
+    } catch (e) {
+      // Catch network/SSL HandshakeExceptions (e.g. CERTIFICATE_VERIFY_FAILED from Cloudflare protection)
+    }
 
     return {
       type: "hls",
-      url: directUrl || "",
+      url: directUrl,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.142.86 Safari/537.36",
-        referer: directUrl,
+        referer: directUrl || "https://yomovies.church/",
       },
     };
   }
