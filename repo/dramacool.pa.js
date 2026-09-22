@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         DramaCool
-// @version      v0.0.5
+// @version      v0.0.6
 // @author       OshekharO
 // @lang         en
 // @license      MIT
@@ -228,7 +228,10 @@ export default class extends Extension {
       if (parsed) ivStr = parsed;
     }
 
-    const streamUrl = await this.decryptAesCbc(encryptedData, keyStr, ivStr);
+    let streamUrl = await this.decryptAesCbc(encryptedData, keyStr, ivStr);
+    if (!streamUrl || !streamUrl.startsWith("http")) {
+      throw new Error("Decrypted stream URL is invalid: " + streamUrl);
+    }
 
     return {
       type: "hls",
@@ -273,23 +276,6 @@ export default class extends Extension {
     const keyBytes = strToBytes(keyStr);
     const ivBytes = strToBytes(ivStr);
 
-    if (typeof crypto !== "undefined" && crypto.subtle) {
-      const key = await crypto.subtle.importKey(
-        "raw",
-        new Uint8Array(keyBytes),
-        { name: "AES-CBC" },
-        false,
-        ["decrypt"]
-      );
-      const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-CBC", iv: new Uint8Array(ivBytes) },
-        key,
-        new Uint8Array(cipherBytes)
-      );
-      const decBytes = new Uint8Array(decrypted);
-      return new TextDecoder("utf-8").decode(decBytes);
-    }
-
     const S = [
       0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
       0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
@@ -319,18 +305,22 @@ export default class extends Extension {
 
     const w = [];
     for (let i = 0; i < Nk; i++) {
-      w[i] = (keyBytes[4 * i] << 24) | (keyBytes[4 * i + 1] << 16) | (keyBytes[4 * i + 2] << 8) | keyBytes[4 * i + 3];
+      w[i] = [keyBytes[4 * i], keyBytes[4 * i + 1], keyBytes[4 * i + 2], keyBytes[4 * i + 3]];
     }
     for (let i = Nk; i < 4 * (Nr + 1); i++) {
-      let temp = w[i - 1];
+      let temp = [w[i - 1][0], w[i - 1][1], w[i - 1][2], w[i - 1][3]];
       if (i % Nk === 0) {
-        temp = (temp << 8) | (temp >>> 24);
-        temp = (S[(temp >>> 24) & 0xff] << 24) | (S[(temp >>> 16) & 0xff] << 16) | (S[(temp >>> 8) & 0xff] << 8) | S[temp & 0xff];
-        temp ^= Rcon[Math.floor(i / Nk)] << 24;
+        temp = [S[temp[1]], S[temp[2]], S[temp[3]], S[temp[0]]];
+        temp[0] ^= Rcon[Math.floor(i / Nk)];
       } else if (Nk > 6 && i % Nk === 4) {
-        temp = (S[(temp >>> 24) & 0xff] << 24) | (S[(temp >>> 16) & 0xff] << 16) | (S[(temp >>> 8) & 0xff] << 8) | S[temp & 0xff];
+        temp = [S[temp[0]], S[temp[1]], S[temp[2]], S[temp[3]]];
       }
-      w[i] = w[i - Nk] ^ temp;
+      w[i] = [
+        w[i - Nk][0] ^ temp[0],
+        w[i - Nk][1] ^ temp[1],
+        w[i - Nk][2] ^ temp[2],
+        w[i - Nk][3] ^ temp[3],
+      ];
     }
 
     const mul = (a, b) => {
@@ -345,54 +335,75 @@ export default class extends Extension {
       return p;
     };
 
-    const invMixColumns = (state) => {
+    const invMixColumns = (s) => {
       for (let c = 0; c < 4; c++) {
-        let s0 = state[c], s1 = state[4 + c], s2 = state[8 + c], s3 = state[12 + c];
-        state[c] = mul(s0, 0x0e) ^ mul(s1, 0x0b) ^ mul(s2, 0x0d) ^ mul(s3, 0x09);
-        state[4 + c] = mul(s0, 0x09) ^ mul(s1, 0x0e) ^ mul(s2, 0x0b) ^ mul(s3, 0x0d);
-        state[8 + c] = mul(s0, 0x0d) ^ mul(s1, 0x09) ^ mul(s2, 0x0e) ^ mul(s3, 0x0b);
-        state[12 + c] = mul(s0, 0x0b) ^ mul(s1, 0x0d) ^ mul(s2, 0x09) ^ mul(s3, 0x0e);
+        let s0 = s[0][c], s1 = s[1][c], s2 = s[2][c], s3 = s[3][c];
+        s[0][c] = mul(s0, 0x0e) ^ mul(s1, 0x0b) ^ mul(s2, 0x0d) ^ mul(s3, 0x09);
+        s[1][c] = mul(s0, 0x09) ^ mul(s1, 0x0e) ^ mul(s2, 0x0b) ^ mul(s3, 0x0d);
+        s[2][c] = mul(s0, 0x0d) ^ mul(s1, 0x09) ^ mul(s2, 0x0e) ^ mul(s3, 0x0b);
+        s[3][c] = mul(s0, 0x0b) ^ mul(s1, 0x0d) ^ mul(s2, 0x09) ^ mul(s3, 0x0e);
       }
     };
 
-    const decryptBlock = (block, out) => {
-      let state = [];
-      for (let i = 0; i < 16; i++) state[i] = block[i];
-
-      for (let i = 0; i < 16; i++) {
-        state[i] ^= (w[4 * Nr + (i % 4)] >>> (24 - 8 * Math.floor(i / 4))) & 0xff;
+    const addRoundKey = (s, round) => {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          s[r][c] ^= w[round * 4 + c][r];
+        }
       }
+    };
+
+    const decryptBlock = (block) => {
+      let s = [
+        [block[0], block[4], block[8], block[12]],
+        [block[1], block[5], block[9], block[13]],
+        [block[2], block[6], block[10], block[14]],
+        [block[3], block[7], block[11], block[15]],
+      ];
+
+      addRoundKey(s, Nr);
 
       for (let round = Nr - 1; round >= 0; round--) {
-        let tmp = [];
-        tmp[0] = Si[state[0]]; tmp[4] = Si[state[4]]; tmp[8] = Si[state[8]]; tmp[12] = Si[state[12]];
-        tmp[1] = Si[state[13]]; tmp[5] = Si[state[1]]; tmp[9] = Si[state[5]]; tmp[13] = Si[state[9]];
-        tmp[2] = Si[state[10]]; tmp[6] = Si[state[14]]; tmp[10] = Si[state[2]]; tmp[14] = Si[state[6]];
-        tmp[3] = Si[state[7]]; tmp[7] = Si[state[11]]; tmp[11] = Si[state[15]]; tmp[15] = Si[state[3]];
-        for (let i = 0; i < 16; i++) state[i] = tmp[i];
+        let t0 = s[1][3], t1 = s[1][0], t2 = s[1][1], t3 = s[1][2];
+        s[1] = [t0, t1, t2, t3];
 
-        for (let i = 0; i < 16; i++) {
-          state[i] ^= (w[round * 4 + (i % 4)] >>> (24 - 8 * Math.floor(i / 4))) & 0xff;
+        t0 = s[2][2]; t1 = s[2][3]; t2 = s[2][0]; t3 = s[2][1];
+        s[2] = [t0, t1, t2, t3];
+
+        t0 = s[3][1]; t1 = s[3][2]; t2 = s[3][3]; t3 = s[3][0];
+        s[3] = [t0, t1, t2, t3];
+
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++) {
+            s[r][c] = Si[s[r][c]];
+          }
         }
 
+        addRoundKey(s, round);
+
         if (round > 0) {
-          invMixColumns(state);
+          invMixColumns(s);
         }
       }
 
-      for (let i = 0; i < 16; i++) out[i] = state[i];
+      let out = [];
+      for (let c = 0; c < 4; c++) {
+        for (let r = 0; r < 4; r++) {
+          out.push(s[r][c]);
+        }
+      }
+      return out;
     };
 
     let decrypted = [];
     let prevBlock = ivBytes;
-    let blockOut = [];
 
     for (let i = 0; i < cipherBytes.length; i += 16) {
       let block = [];
       for (let k = 0; k < 16; k++) block[k] = cipherBytes[i + k];
-      decryptBlock(block, blockOut);
+      let blockOut = decryptBlock(block);
       for (let j = 0; j < 16; j++) {
-        decrypted[i + j] = blockOut[j] ^ prevBlock[j];
+        decrypted.push(blockOut[j] ^ prevBlock[j]);
       }
       prevBlock = block;
     }
