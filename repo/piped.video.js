@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         Piped
-// @version      v0.0.2
+// @version      v0.0.3
 // @author       bethro
 // @lang         all
 // @license      MIT
@@ -16,11 +16,15 @@ export default class extends Extension {
         if (apiUrl === "https://piped.private.coffee") {
             apiUrl = "https://api.piped.private.coffee";
         }
-        return this.request(url, {
-            headers: {
-                "Miru-Url": apiUrl,
-            },
-        });
+        try {
+            return await this.request(url, {
+                headers: {
+                    "Miru-Url": apiUrl,
+                },
+            });
+        } catch (e) {
+            return { error: true, message: e ? (e.message || String(e)) : "Request failed" };
+        }
     }
 
     async load() {
@@ -71,6 +75,15 @@ export default class extends Extension {
         const videoID = url.split("v=").pop();
         const res = await this.req(`/streams/${videoID}`);
 
+        if (res && res.error) {
+            return {
+                title: `Video (${videoID})`,
+                cover: "",
+                desc: res.message || "Failed to fetch video details from Piped API.",
+                episodes: [],
+            };
+        }
+
         let preferredQuality = await this.getSetting("quality");
         const sortEpisodes = (episodes) =>
             episodes.sort((a, b) => {
@@ -106,14 +119,17 @@ export default class extends Extension {
 
     async watch(url) {
         const [videoUrl, audioUrl, videoID] = url.split("|");
-        const sub = await this.req(`/streams/${videoID}`);
+        let subtitles = [];
 
-        const subtitlesList = sub && Array.isArray(sub.subtitles) ? sub.subtitles : [];
-        const subtitles = subtitlesList.map((item) => ({
-            title: item.name,
-            url: item.url,
-            language: item.code,
-        }));
+        if (videoID) {
+            const sub = await this.req(`/streams/${videoID}`);
+            const subtitlesList = sub && Array.isArray(sub.subtitles) ? sub.subtitles : [];
+            subtitles = subtitlesList.map((item) => ({
+                title: item.name,
+                url: item.url,
+                language: item.code,
+            }));
+        }
 
         const type = videoUrl.includes(".m3u8") ? "hls" : "mp4";
 
