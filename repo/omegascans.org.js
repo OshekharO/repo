@@ -1,13 +1,13 @@
 // ==MiruExtension==
 // @name         Omegascans
-// @version      v0.0.3
+// @version      v0.0.2
 // @author       bethro
 // @lang         en
 // @license      MIT
 // @icon         https://omegascans.org/icon.png
 // @package      omegascans.org
 // @type         manga
-// @webSite      https://omegascans.org
+// @webSite      https://api.omegascans.org
 // @nsfw         true
 // ==/MiruExtension==
 
@@ -32,7 +32,7 @@ export default class extends Extension {
 
   async latest(page) {
     const res = await this.req(`/query?query_string=&series_status=All&order=desc&orderBy=total_views&series_type=Comic&page=${page}&perPage=20`);
-    return (res?.data || []).map((item) => ({
+    return res.data.map((item) => ({
       url: item.series_slug,
       title: item.title,
       cover: item.thumbnail,
@@ -51,7 +51,7 @@ export default class extends Extension {
       episodes: [
         {
           title: "Chapters",
-          urls: (epRes?.data || []).map((item) => ({
+          urls: epRes.data.map((item) => ({
             name: item.chapter_name != null ? item.chapter_name : `Chapter ${item.title}`,
             url: `${item.series.series_slug}/${item.chapter_slug}`,
           })),
@@ -62,7 +62,7 @@ export default class extends Extension {
 
   async search(kw, page) {
     const res = await this.req(`/query?query_string=${encodeURIComponent(kw)}&series_status=All&order=desc&orderBy=total_views&series_type=Comic&page=${page}&perPage=20`);
-    return (res?.data || []).map((item) => ({
+    return res.data.map((item) => ({
       url: item.series_slug,
       title: item.title,
       cover: item.thumbnail,
@@ -70,9 +70,9 @@ export default class extends Extension {
   }
 
   async watch(url) {
-    const res = await this.req(`/chapter/${url}`);
+    const res = await this.request(`/chapter/${url}`);
     return {
-      urls: res?.chapter?.chapter_data?.images || [],
+      urls: res.chapter.chapter_data.images,
     };
   }
 }
