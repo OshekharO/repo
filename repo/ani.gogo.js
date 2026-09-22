@@ -7,46 +7,49 @@
 // @icon         https://anilist.co/img/icons/apple-touch-icon.png
 // @package      ani.gogo
 // @type         bangumi
-// @webSite      https://graphql.anilist.co
+// @webSite      https://animex.one
 // ==/MiruExtension==
 
 export default class extends Extension {
-  async req(query, variables = {}) {
-    const api = await this.getSetting("anilistApi");
+  async req(url, options = {}) {
+    const headers = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      Origin: "https://animex.one",
+      Referer: "https://animex.one/",
+      ...(options.headers || {}),
+      "Miru-Url": url,
+    };
     return this.request("", {
-      headers: {
-        "Miru-Url": api || "https://graphql.anilist.co",
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-      data: {
-        query,
-        variables,
-      },
-    });
-  }
-
-  async load() {
-    this.registerSetting({
-      title: "AniList API",
-      key: "anilistApi",
-      type: "input",
-      description: "AniList GraphQL API Url",
-      defaultValue: "https://graphql.anilist.co",
+      ...options,
+      headers,
     });
   }
 
   async latest(page) {
+    const p = page || 1;
+    const res = await this.req(`https://graphql.animex.one/api/recent?page=${p}`);
+    const results = res?.results || [];
+    return results.map((item) => {
+      const title = item.titleEnglish || item.titleRomaji || item.titleNative || "";
+      const cover = item.coverImage?.extraLarge || item.coverImage?.large || "";
+      return {
+        title,
+        url: item.id.toString(),
+        cover,
+      };
+    });
+  }
+
+  async search(kw, page) {
     const query = `
-      query ($page: Int) {
-        Page(page: $page, perPage: 15) {
-          media(sort: TRENDING_DESC, type: ANIME) {
+      query FastSearch($query: String, $limit: Int) {
+        catalogAnime(filter: { query: $query }, limit: $limit) {
+          items {
             id
-            title {
-              english
-              romaji
-              native
-            }
+            anilistId
+            titleEnglish
+            titleRomaji
             coverImage {
               extraLarge
               large
@@ -55,10 +58,23 @@ export default class extends Extension {
         }
       }
     `;
-    const res = await this.req(query, { page: page || 1 });
-    const mediaList = res?.data?.Page?.media || [];
-    return mediaList.map((item) => {
-      const title = item.title?.english || item.title?.romaji || item.title?.native || "";
+    const res = await this.req("https://graphql.animex.one/graphql", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: {
+        query,
+        variables: {
+          query: kw,
+          limit: 15,
+        },
+      },
+    });
+
+    const items = res?.data?.catalogAnime?.items || [];
+    return items.map((item) => {
+      const title = item.titleEnglish || item.titleRomaji || "N/A";
       const cover = item.coverImage?.extraLarge || item.coverImage?.large || "";
       return {
         title,
@@ -69,80 +85,73 @@ export default class extends Extension {
   }
 
   async detail(url) {
-    const query = `
-      query ($id: Int) {
-        Media(id: $id, type: ANIME) {
-          id
-          title {
-            english
-            romaji
-            native
-          }
-          coverImage {
-            extraLarge
-            large
-          }
-          description(asHtml: false)
-          streamingEpisodes {
-            title
-            thumbnail
-            url
-            site
+    const animeId = url;
+    let title = animeId;
+    let cover = "";
+    let desc = "";
+
+    // Query GraphQL for anime info
+    try {
+      const query = `
+        query GetAnime($query: String) {
+          catalogAnime(filter: { query: $query }, limit: 1) {
+            items {
+              id
+              titleEnglish
+              titleRomaji
+              coverImage {
+                extraLarge
+                large
+              }
+            }
           }
         }
+      `;
+      const infoRes = await this.req("https://graphql.animex.one/graphql", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          query,
+          variables: { query: animeId },
+        },
+      });
+      const item = infoRes?.data?.catalogAnime?.items?.[0];
+      if (item) {
+        title = item.titleEnglish || item.titleRomaji || animeId;
+        cover = item.coverImage?.extraLarge || item.coverImage?.large || "";
       }
-    `;
-    const res = await this.req(query, { id: parseInt(url, 10) });
-    const media = res?.data?.Media || {};
-    const title = media.title?.english || media.title?.romaji || media.title?.native || "";
-    const cover = media.coverImage?.extraLarge || media.coverImage?.large || "";
-    const desc = media.description || "";
-
-    let episodeUrls = [];
-    const streamingEps = media.streamingEpisodes || [];
-    if (streamingEps.length > 0) {
-      episodeUrls = streamingEps.map((ep, idx) => ({
-        name: ep.title || `Episode ${idx + 1}`,
-        url: ep.url || "",
-      }));
+    } catch (e) {
+      // Fallback title/cover if GraphQL query fails
     }
 
-    if (episodeUrls.length === 0) {
-      try {
-        const anizipRes = await this.request("", {
-          headers: {
-            "Miru-Url": `https://api.ani.zip/mappings?anilist_id=${url}`,
-          },
+    // Fetch episode list from Animex REST API
+    let episodeUrls = [];
+    try {
+      const epRes = await this.req(
+        `https://pp.animex.one/rest/api/episodes?id=${encodeURIComponent(animeId)}`
+      );
+      if (Array.isArray(epRes) && epRes.length > 0) {
+        episodeUrls = epRes.map((ep) => {
+          const epNum = ep.number;
+          const epTitle =
+            ep.titles?.en || ep.titles?.x_jat || ep.titles?.ja || `Episode ${epNum}`;
+          return {
+            name: `Ep ${epNum}: ${epTitle}`,
+            url: `${animeId};${epNum}`,
+          };
         });
-        if (anizipRes && anizipRes.episodes) {
-          const epsObj = anizipRes.episodes;
-          const keys = Object.keys(epsObj);
-          const normalEps = keys
-            .filter((k) => k.match(/^\d+$/))
-            .map((k) => epsObj[k])
-            .sort((a, b) => parseInt(a.episode, 10) - parseInt(b.episode, 10));
-
-          if (normalEps.length > 0) {
-            episodeUrls = normalEps.map((ep) => {
-              const epNum = ep.episode;
-              const epTitle = ep.title?.en || ep.title?.x_jat || ep.title?.ja || `Episode ${epNum}`;
-              return {
-                name: `Ep ${epNum}: ${epTitle}`,
-                url: epNum.toString(),
-              };
-            });
-          }
-        }
-      } catch (e) {
-        // Fallback
       }
+    } catch (e) {
+      // Fallback
     }
 
     if (episodeUrls.length === 0) {
       episodeUrls = [
         {
           name: "Episode 1",
-          url: "1",
+          url: `${animeId};1`,
         },
       ];
     }
@@ -160,42 +169,56 @@ export default class extends Extension {
     };
   }
 
-  async search(kw, page) {
-    const query = `
-      query ($search: String, $page: Int) {
-        Page(page: $page, perPage: 15) {
-          media(search: $search, type: ANIME) {
-            id
-            title {
-              english
-              romaji
-              native
-            }
-            coverImage {
-              extraLarge
-              large
-            }
-          }
-        }
-      }
-    `;
-    const res = await this.req(query, { search: kw, page: page || 1 });
-    const mediaList = res?.data?.Page?.media || [];
-    return mediaList.map((item) => {
-      const title = item.title?.english || item.title?.romaji || item.title?.native || "N/A";
-      const cover = item.coverImage?.extraLarge || item.coverImage?.large || "N/A";
-      return {
-        title,
-        url: item.id.toString(),
-        cover,
-      };
-    });
-  }
-
   async watch(url) {
+    const parts = url.split(";");
+    const animeId = parts[0];
+    const epNum = parts[1] || "1";
+
+    let providerId = "beep";
+    try {
+      const serverRes = await this.req(
+        `https://pp.animex.one/rest/api/servers?id=${encodeURIComponent(
+          animeId
+        )}&epNum=${encodeURIComponent(epNum)}`
+      );
+      if (serverRes?.subProviders && serverRes.subProviders.length > 0) {
+        const defaultProv = serverRes.subProviders.find((p) => p.default);
+        providerId = defaultProv ? defaultProv.id : serverRes.subProviders[0].id;
+      }
+    } catch (e) {
+      // Fallback to default providerId "beep"
+    }
+
+    const sourcesRes = await this.req(
+      `https://pp.animex.one/rest/api/sources?id=${encodeURIComponent(
+        animeId
+      )}&epNum=${encodeURIComponent(epNum)}&type=sub&providerId=${encodeURIComponent(
+        providerId
+      )}`
+    );
+
+    const sources = sourcesRes?.sources || [];
+    let streamUrl = "";
+    if (sources.length > 0) {
+      streamUrl = sources[0].url || "";
+    }
+
+    const subtitles = (sourcesRes?.tracks || [])
+      .filter((t) => t.url)
+      .map((t) => ({
+        title: t.label || t.lang || "Subtitle",
+        url: t.url,
+      }));
+
+    const reqHeaders = sourcesRes?.headers || {
+      Referer: "https://playeng.animeapps.top/",
+    };
+
     return {
       type: "hls",
-      url: url.startsWith("http") ? url : "",
+      url: streamUrl,
+      headers: reqHeaders,
+      subtitles,
     };
   }
 }
