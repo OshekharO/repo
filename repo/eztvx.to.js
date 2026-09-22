@@ -93,31 +93,40 @@ export default class extends Extension {
     return { cover, desc };
   }
 
+  formatEztvScreenshot(item) {
+    if (item.large_screenshot) {
+      return item.large_screenshot.startsWith("//")
+        ? "https:" + item.large_screenshot
+        : item.large_screenshot;
+    }
+    if (item.small_screenshot) {
+      return item.small_screenshot.startsWith("//")
+        ? "https:" + item.small_screenshot
+        : item.small_screenshot;
+    }
+    return "";
+  }
+
   async latest(page) {
     const res = await this.request(`/api/get-torrents?limit=30&page=${page}`);
     if (!res || !res.torrents) return [];
 
-    return res.torrents.map((item) => {
-      const sizeStr = this.formatSize(item.size_bytes);
-      const updateText = `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`;
+    return Promise.all(
+      res.torrents.map(async (item) => {
+        const sizeStr = this.formatSize(item.size_bytes);
+        const updateText = `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`;
 
-      let cover = item.large_screenshot
-        ? item.large_screenshot.startsWith("//")
-          ? "https:" + item.large_screenshot
-          : item.large_screenshot
-        : item.small_screenshot
-        ? item.small_screenshot.startsWith("//")
-          ? "https:" + item.small_screenshot
-          : item.small_screenshot
-        : "";
+        const meta = await this.getMetadata(item.imdb_id, item.title || item.filename);
+        const cover = meta.cover || this.formatEztvScreenshot(item);
 
-      return {
-        title: item.title || item.filename,
-        url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
-        cover: cover,
-        update: updateText,
-      };
-    });
+        return {
+          title: item.title || item.filename,
+          url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
+          cover: cover,
+          update: updateText,
+        };
+      })
+    );
   }
 
   async search(kw, page) {
@@ -127,25 +136,20 @@ export default class extends Extension {
       const res = await this.request(`/api/get-torrents?imdb_id=${imdbId}&page=${page}`);
       if (!res || !res.torrents) return [];
 
-      return res.torrents.map((item) => {
-        const sizeStr = this.formatSize(item.size_bytes);
-        let cover = item.large_screenshot
-          ? item.large_screenshot.startsWith("//")
-            ? "https:" + item.large_screenshot
-            : item.large_screenshot
-          : item.small_screenshot
-          ? item.small_screenshot.startsWith("//")
-            ? "https:" + item.small_screenshot
-            : item.small_screenshot
-          : "";
+      return Promise.all(
+        res.torrents.map(async (item) => {
+          const sizeStr = this.formatSize(item.size_bytes);
+          const meta = await this.getMetadata(item.imdb_id, item.title || item.filename);
+          const cover = meta.cover || this.formatEztvScreenshot(item);
 
-        return {
-          title: item.title || item.filename,
-          url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
-          cover: cover,
-          update: `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`,
-        };
-      });
+          return {
+            title: item.title || item.filename,
+            url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
+            cover: cover,
+            update: `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`,
+          };
+        })
+      );
     }
 
     const res = await this.request(`/api/get-torrents?limit=30&page=${page}`);
@@ -157,25 +161,20 @@ export default class extends Extension {
       return title.includes(lowerKw);
     });
 
-    return filtered.map((item) => {
-      const sizeStr = this.formatSize(item.size_bytes);
-      let cover = item.large_screenshot
-        ? item.large_screenshot.startsWith("//")
-          ? "https:" + item.large_screenshot
-          : item.large_screenshot
-        : item.small_screenshot
-        ? item.small_screenshot.startsWith("//")
-          ? "https:" + item.small_screenshot
-          : item.small_screenshot
-        : "";
+    return Promise.all(
+      filtered.map(async (item) => {
+        const sizeStr = this.formatSize(item.size_bytes);
+        const meta = await this.getMetadata(item.imdb_id, item.title || item.filename);
+        const cover = meta.cover || this.formatEztvScreenshot(item);
 
-      return {
-        title: item.title || item.filename,
-        url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
-        cover: cover,
-        update: `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`,
-      };
-    });
+        return {
+          title: item.title || item.filename,
+          url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
+          cover: cover,
+          update: `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`,
+        };
+      })
+    );
   }
 
   async detail(url) {
@@ -209,20 +208,8 @@ export default class extends Extension {
     const rawTitle = firstItem.title || firstItem.filename;
     const cleanTitle = this.cleanShowTitle(rawTitle);
 
-    let cover = firstItem.large_screenshot
-      ? firstItem.large_screenshot.startsWith("//")
-        ? "https:" + firstItem.large_screenshot
-        : firstItem.large_screenshot
-      : firstItem.small_screenshot
-      ? firstItem.small_screenshot.startsWith("//")
-        ? "https:" + firstItem.small_screenshot
-        : firstItem.small_screenshot
-      : "";
-
     const meta = await this.getMetadata(firstItem.imdb_id, rawTitle);
-    if (!cover && meta.cover) {
-      cover = meta.cover;
-    }
+    const cover = meta.cover || this.formatEztvScreenshot(firstItem);
     const desc = meta.desc || (firstItem.imdb_id && firstItem.imdb_id !== "0" ? `IMDB ID: ${firstItem.imdb_id}` : "");
 
     if (torrents.length === 1) {
