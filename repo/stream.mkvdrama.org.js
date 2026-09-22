@@ -1,78 +1,139 @@
 // ==MiruExtension==
 // @name         MkvDrama
-// @version      v0.0.2
+// @version      v0.0.3
 // @author       bachig26
 // @lang         en
 // @license      MIT
 // @package      stream.mkvdrama.org
 // @type         bangumi
-// @icon         https://mkvdrama.org/wp-content/uploads/2023/03/474a064744e1d9fe02e1124b2b071c70.png
-// @webSite      https://stream.mkvdrama.org
+// @icon         https://kisskh.top/wp-content/uploads/2024/11/Kisskh.png
+// @webSite      https://kisskh.top
 // @nsfw         false
 // ==/MiruExtension==
 
 export default class extends Extension {
   async latest(page) {
-    const res = await this.request(`/popular?page=${page}`);
-    const bsxList = await this.querySelectorAll(res, "div.list-upd > div.drama-item");
+    const res = await this.request(`/trending/page/${page}/`);
+    const bsxList = await this.querySelectorAll(res, "article.item, article.post, article.w_item_b, div.poster");
     const novel = [];
     for (const element of bsxList) {
       const html = await element.content;
       const url = await this.getAttributeText(html, "a", "href");
-      const title = await this.querySelector(html, "b").text;
-      const cover = await this.querySelector(html, "img").getAttributeText("src");
+      if (!url) continue;
 
-      novel.push({
-        title: title.trim(),
-        url: "https://stream.mkvdrama.org" + url,
-        cover,
-      });
+      let title = "";
+      const titleElem = await this.querySelector(html, "h3");
+      if (titleElem) {
+        title = await titleElem.text;
+      }
+      if (!title) {
+        const imgElem = await this.querySelector(html, "img");
+        if (imgElem) {
+          title = await imgElem.getAttributeText("alt");
+        }
+      }
+
+      let cover = "";
+      const imgElem = await this.querySelector(html, "img");
+      if (imgElem) {
+        cover = await imgElem.getAttributeText("src");
+      }
+
+      if (title && url) {
+        novel.push({
+          title: title.trim(),
+          url: url.startsWith("http") ? url : "https://kisskh.top" + url,
+          cover,
+        });
+      }
     }
-    return novel;
+
+    // Deduplicate by URL
+    const unique = [];
+    const seen = new Set();
+    for (const item of novel) {
+      if (!seen.has(item.url)) {
+        seen.add(item.url);
+        unique.push(item);
+      }
+    }
+    return unique;
   }
 
   async search(kw) {
-    const res = await this.request(`/search.html?keyword=${kw}`);
-    const bsxList = await this.querySelectorAll(res, "div.list-upd > div.drama-item");
+    const res = await this.request(`/?s=${encodeURIComponent(kw)}`);
+    const bsxList = await this.querySelectorAll(res, "article.result-item, article.item, article");
     const novel = [];
     for (const element of bsxList) {
       const html = await element.content;
       const url = await this.getAttributeText(html, "a", "href");
-      const title = await this.querySelector(html, "b").text;
-      const cover = await this.querySelector(html, "img").getAttributeText("src");
+      if (!url || url.includes("/genre/") || url.includes("/release/")) continue;
 
-      novel.push({
-        title: title.trim(),
-        url: "https://stream.mkvdrama.org" + url,
-        cover,
-      });
+      let title = "";
+      const titleElem = await this.querySelector(html, "h3");
+      if (titleElem) {
+        title = await titleElem.text;
+      }
+      if (!title) {
+        const imgElem = await this.querySelector(html, "img");
+        if (imgElem) {
+          title = await imgElem.getAttributeText("alt");
+        }
+      }
+
+      let cover = "";
+      const imgElem = await this.querySelector(html, "img");
+      if (imgElem) {
+        cover = await imgElem.getAttributeText("src");
+      }
+
+      if (title && url) {
+        novel.push({
+          title: title.trim(),
+          url: url.startsWith("http") ? url : "https://kisskh.top" + url,
+          cover,
+        });
+      }
     }
-    return novel;
+
+    // Deduplicate by URL
+    const unique = [];
+    const seen = new Set();
+    for (const item of novel) {
+      if (!seen.has(item.url)) {
+        seen.add(item.url);
+        unique.push(item);
+      }
+    }
+    return unique;
   }
 
   async detail(url) {
     const res = await this.request("", {
       headers: {
-        "Miru-Url": url,
+        "Miru-Url": url.startsWith("http") ? url : "https://kisskh.top" + url,
       },
     });
 
-    const title = await this.querySelector(res, "span.date").text;
-    const cover = await this.querySelector(res, "img.episode-picture").getAttributeText("src");
-    const desc = await this.querySelector(res, "div.content-more-js > p").text;
-    const episodes = [];
-    const epiList = await this.querySelectorAll(res, "div.episode-grid > article.episode-card");
-
-    for (const element of epiList) {
-      const html = await element.content;
-      const name = await this.querySelector(html, "h2").text;
-      const url = await this.getAttributeText(html, "a", "href");
-
-      episodes.push({
-        name: name.trim(),
-        url,
-      });
+    let title = "";
+    const titleElem = await this.querySelector(res, "h1");
+    if (titleElem) {
+      title = await titleElem.text;
     }
+
+    let cover = "";
+    const coverElem = await this.querySelector(res, "div.poster img, div.sheader img");
+    if (coverElem) {
+      cover = await coverElem.getAttributeText("src");
+    }
+
+    let desc = "";
+    const descElem = await this.querySelector(res, "div#player + p, div.entry-content p, div.wp-content p");
+    if (descElem) {
+      desc = await descElem.text;
+    }
+
+    const fullUrl = url.startsWith("http") ? url : "https://kisskh.top" + url;
 
     return {
       title: title.trim(),
@@ -81,46 +142,80 @@ export default class extends Extension {
       episodes: [
         {
           title: "Directory",
-          urls: episodes.reverse(),
+          urls: [
+            {
+              name: "Full Video",
+              url: fullUrl,
+            },
+          ],
         },
       ],
     };
   }
 
   async watch(url) {
+    const pageUrl = url.startsWith("http") ? url : "https://kisskh.top" + url;
     const res = await this.request("", {
       headers: {
-        "Miru-Url": `https://stream.mkvdrama.org${url}`,
+        "Miru-Url": pageUrl,
       },
     });
-    const urlPatterns = [/<iframe id="iframe-to-load" src="(.+?)"/];
 
-    let episodeUrl = "";
+    let directUrl = "";
 
-    for (const pattern of urlPatterns) {
-      const match = res.match(pattern);
-      if (match) {
-        episodeUrl = match[1];
-        break;
+    // 1. Look for iframe src
+    const iframeMatches = [...res.matchAll(/<iframe[^>]*src=["']([^"']+)["']/gi)];
+    for (const match of iframeMatches) {
+      const iframeSrc = match[1];
+
+      // Check jwplayer source param
+      const sourceMatch = iframeSrc.match(/jwplayer\/\?source=([^&"'\s>]+)/i);
+      if (sourceMatch) {
+        try {
+          directUrl = decodeURIComponent(sourceMatch[1]);
+          break;
+        } catch (e) {
+          directUrl = sourceMatch[1];
+          break;
+        }
+      }
+
+      // If iframe points to jwplayer or embed, fetch iframe content
+      if (iframeSrc.includes("jwplayer") || iframeSrc.includes("embed")) {
+        const fullIframe = iframeSrc.startsWith("http") ? iframeSrc : "https://kisskh.top" + iframeSrc;
+        try {
+          const iframeRes = await this.request("", {
+            headers: {
+              "Miru-Url": fullIframe,
+            },
+          });
+
+          const fileMatch = iframeRes.match(/"file"\s*:\s*"([^"]+)"/);
+          if (fileMatch) {
+            directUrl = fileMatch[1].replace(/\\/g, "");
+            break;
+          }
+        } catch (e) {}
       }
     }
 
-    const iframeLinkRes = await this.request("", {
-      headers: {
-        "Miru-Url": "https://stream.mkvdrama.org" + episodeUrl,
-      },
-    });
+    // 2. Direct regex match fallback on page source for m3u8 or mp4
+    if (!directUrl) {
+      const directMatch = res.match(/https?:\/\/[^\s'"\>]+\.(?:m3u8|mp4)[^\s'"\>]*/i);
+      if (directMatch) {
+        directUrl = directMatch[0];
+      }
+    }
 
-    const directUrlMatch = iframeLinkRes.match(/(https:\/\/[^\s'"]*\.m3u8[^\s'"]*)/);
-    const directUrl = directUrlMatch ? directUrlMatch[0] : "";
+    const isHls = directUrl.includes(".m3u8");
 
     return {
-      type: "hls",
+      type: isHls ? "hls" : "mp4",
       url: directUrl || "",
       headers: {
-        referer: "https://stream.mkvdrama.org/",
-        origin: "https://stream.mkvdrama.org",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.142.86 Safari/537.36",
+        Referer: "https://kisskh.top/",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     };
   }
