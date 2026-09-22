@@ -12,9 +12,11 @@
 
 export default class extends Extension {
   async req(url) {
-    return this.request(url, {
+    const baseUrl = await this.getSetting("dramacool");
+    const formattedUrl = url.startsWith("/") ? url : `/${url}`;
+    return this.request("", {
       headers: {
-        "Miru-Url": await this.getSetting("dramacool"),
+        "Miru-Url": `${baseUrl}${formattedUrl}`,
       },
     });
   }
@@ -31,44 +33,81 @@ export default class extends Extension {
 
   async latest(page) {
     const res = await this.req(`/recently-added?page=${page}`);
-    const bsxList = await this.querySelectorAll(res, "ul.switch-block.list-episode-item > li");
-    const novel = [];
-    for (const element of bsxList) {
-      const html = await element.content;
-      const url = await this.getAttributeText(html, "a", "href");
-      const title = await this.querySelector(html, "h3").text;
-      const cover = await this.querySelector(html, "img").getAttributeText("data-original") || await this.querySelector(html, "img").getAttributeText("src");
-      novel.push({
-        title,
-        url,
-        cover,
-      });
+    const ulMatch = res.match(/<ul class="[^"]*list-episode-item[^"]*">([\s\S]*?)<\/ul>/);
+    const bangumi = [];
+    if (!ulMatch) return bangumi;
+
+    const lis = ulMatch[1].match(/<li[^>]*>([\s\S]*?)<\/li>/g) || [];
+    for (const li of lis) {
+      const hrefMatch = li.match(/href="([^"]+)"/);
+      const imgMatch = li.match(/data-original="([^"]+)"/) || li.match(/src="([^"]+)"/);
+      const titleMatch = li.match(/<h3[^>]*>([^<]+)<\/h3>/);
+
+      if (hrefMatch && imgMatch && titleMatch) {
+        const href = hrefMatch[1].trim();
+        if (!href || href === "#" || href === "/drama-list") continue;
+        const title = titleMatch[1].trim();
+        const cover = imgMatch[1].trim();
+
+        const slug = href.replace(/^\//, "");
+
+        bangumi.push({
+          title,
+          url: slug,
+          cover,
+        });
+      }
     }
-    return novel;
+    return bangumi;
   }
 
   async detail(url) {
-    const res = await this.req(url);
-    const title = await this.querySelector(res, "div.sub-title > h1, div.info > h1").text;
-    const cover = await this.querySelector(res, "div.img > img").getAttributeText("src");
-    const desc = await this.querySelector(res, "div.info > p").text;
+    let cleanUrl = url.replace(/^\//, "");
+    if (!cleanUrl.startsWith("drama-detail/")) {
+      cleanUrl = "drama-detail/" + cleanUrl.replace(/-episode-\d+\.html$/, "");
+    }
 
-    const epList = await this.querySelectorAll(res, "ul.list-episode-item > li");
+    const res = await this.req(`/${cleanUrl}`);
+
+    const titleMatch = res.match(/<h1>([^<]+)<\/h1>/);
+    const title = titleMatch ? titleMatch[1].trim() : "";
+
+    const coverMatch = res.match(/<div class="img">\s*<img[^>]+src="([^"]+)"/) || res.match(/<img[^>]+data-original="([^"]+)"/);
+    const cover = coverMatch ? coverMatch[1].trim() : "";
+
+    let desc = "";
+    const ps = res.match(/<p[^>]*>([\s\S]*?)<\/p>/g) || [];
+    for (const pTag of ps) {
+      const cleanP = pTag.replace(/<[^>]+>/g, "").trim();
+      if (cleanP && !cleanP.includes(":") && cleanP.length > 20) {
+        desc = cleanP;
+        break;
+      }
+    }
+
+    const epUlMatch = res.match(/<ul class="[^"]*list-episode-item[^"]*">([\s\S]*?)<\/ul>/);
     const episodes = [];
-    for (const element of epList) {
-      const html = await element.content;
-      const epUrl = await this.getAttributeText(html, "a", "href");
-      const epTitle = await this.querySelector(html, "h3").text;
-      episodes.push({
-        name: epTitle.strip ? epTitle.strip() : epTitle.trim(),
-        url: epUrl,
-      });
+    if (epUlMatch) {
+      const epLis = epUlMatch[1].match(/<li[^>]*>([\s\S]*?)<\/li>/g) || [];
+      for (const ep of epLis) {
+        const hrefMatch = ep.match(/href="([^"]+)"/);
+        const epTitleMatch = ep.match(/<h3[^>]*>([^<]+)<\/h3>/) || ep.match(/<span class="title">([^<]+)<\/span>/);
+        if (hrefMatch) {
+          const epUrl = hrefMatch[1].replace(/^\//, "");
+          const epName = epTitleMatch ? epTitleMatch[1].trim() : epUrl;
+          episodes.push({
+            name: epName,
+            url: epUrl,
+          });
+        }
+      }
+      episodes.reverse();
     }
 
     return {
-      title: title ? title.trim() : "",
+      title,
       cover,
-      desc: desc ? desc.trim() : "",
+      desc,
       episodes: [
         {
           title: "Directory",
@@ -80,52 +119,59 @@ export default class extends Extension {
 
   async search(kw, page) {
     const res = await this.req(`/search?keyword=${encodeURIComponent(kw)}&page=${page}`);
-    const bsxList = await this.querySelectorAll(res, "ul.switch-block.list-episode-item > li");
-    const novel = [];
-    for (const element of bsxList) {
-      const html = await element.content;
-      const url = await this.getAttributeText(html, "a", "href");
-      const title = await this.querySelector(html, "h3").text;
-      const cover = await this.querySelector(html, "img").getAttributeText("data-original") || await this.querySelector(html, "img").getAttributeText("src");
-      novel.push({
-        title: title ? title.trim() : "",
-        url,
-        cover,
-      });
+    const ulMatch = res.match(/<ul class="[^"]*list-episode-item[^"]*">([\s\S]*?)<\/ul>/) || res.match(/<ul class="[^"]*switch-block[^"]*">([\s\S]*?)<\/ul>/);
+    const bangumi = [];
+    if (!ulMatch) return bangumi;
+
+    const lis = ulMatch[1].match(/<li[^>]*>([\s\S]*?)<\/li>/g) || [];
+    for (const li of lis) {
+      const hrefMatch = li.match(/href="([^"]+)"/);
+      const imgMatch = li.match(/data-original="([^"]+)"/) || li.match(/src="([^"]+)"/);
+      const titleMatch = li.match(/<h3[^>]*>([^<]+)<\/h3>/);
+
+      if (hrefMatch && imgMatch && titleMatch) {
+        const href = hrefMatch[1].trim();
+        if (!href || href === "#" || href === "/drama-list") continue;
+        const title = titleMatch[1].trim();
+        const cover = imgMatch[1].trim();
+
+        const slug = href.replace(/^\//, "");
+
+        bangumi.push({
+          title,
+          url: slug,
+          cover,
+        });
+      }
     }
-    return novel;
-  }
-
-  decryptVidBasic(data, keyStr, ivStr) {
-    var CryptoJS = CryptoJS || function(u,p){var d={},l=d.lib={},s=function(){},t=l.Base={extend:function(a){s.prototype=this;var c=new s;a&&c.mixIn(a);c.hasOwnProperty("init")||(c.init=function(){c.$super.init.apply(this,arguments)});c.init.prototype=c;c.$super=this;return c},create:function(){var a=this.extend();a.init.apply(a,arguments);return a},init:function(){},mixIn:function(a){for(var c in a)a.hasOwnProperty(c)&&(this[c]=a[c]);a.hasOwnProperty("toString")&&(this.toString=a.toString)},clone:function(){return this.init.prototype.extend(this)}},r=d.WordArray=t.extend({init:function(a,c){a=this.words=a||[];this.sigBytes=c!=p?c:4*a.length},toString:function(a){return(a||v).stringify(this)},concat:function(a){var c=this.words,e=a.words,j=this.sigBytes;a=a.sigBytes;this.clamp();if(j%4)for(var k=0;k<a;k++)c[j+k>>>2]|=(e[k>>>2]>>>24-8*(k%4)&255)<<24-8*((j+k)%4);else if(55<e.length)for(k=0;k<a;k+=4)c[j+k>>>2]=e[k>>>2];else c.push.apply(c,e);this.sigBytes+=a;return this},clamp:function(){var a=this.words,c=this.sigBytes;a[c>>>2]&=4294967295<<32-8*(c%4);a.length=u.ceil(c/4)},clone:function(){var a=t.clone.call(this);a.words=this.words.slice(0);return a},random:function(a){for(var c=[],e=0;e<a;e+=4)c.push(4294967296*u.random()|0);return new r.init(c,a)}},w=d.enc={},v=w.Hex={stringify:function(a){var c=a.words;a=a.sigBytes;for(var e=[],j=0;j<a;j++){var k=c[j>>>2]>>>24-8*(j%4)&255;e.push((k>>>4).toString(16));e.push((k&15).toString(16))}return e.join("")},parse:function(a){for(var c=a.length,e=[],j=0;j<c;j+=2)e[j>>>3]|=parseInt(a.substr(j,2),16)<<24-4*(j%8);return new r.init(e,c/2)}},b=w.Utf8={stringify:function(a){var c=a.words,e=a.sigBytes;a=[];for(var j=0;j<e;j++){var k=c[j>>>2]>>>24-8*(j%4)&255;a.push(String.fromCharCode(k))}return decodeURIComponent(escape(a.join("")))},parse:function(a){return b.parse(unescape(encodeURIComponent(a)))}},x=w.Base64={stringify:function(a){var c=a.words,e=a.sigBytes,j=this._map;a.clamp();for(var k=[],z=0;z<e;z+=3)for(var F=(c[z>>>2]>>>24-8*(z%4)&255)<<16|(c[z+1>>>2]>>>24-8*((z+1)%4)&255)<<8|c[z+2>>>2]>>>24-8*((z+2)%4)&255,G=0;4>G&&z+0.75*G<e;G++)k.push(j.charAt(F>>>6*(3-G)&63));if(c=j.charAt(64))for(;k.length%4;)k.push(c);return k.join("")},parse:function(a){var c=a.length,e=this._map,j=e.charAt(64);j&&(j=a.indexOf(j),-1!=j&&(c=j));for(var j=[],k=0,z=0;z<c;z++)if(z%4){var F=e.indexOf(a.charAt(z-1))<<2*(z%4),G=e.indexOf(a.charAt(z))>>>6-2*(z%4);j[k>>>2]|=(F|G)<<24-8*(k%4);k++}return r.create(j,k)},_map:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="};return d}(Math);
-    (function(){var u=CryptoJS,p=u.lib,d=p.Base,l=p.WordArray,p=u.algo,s=p.EvpKDF=d.extend({cfg:d.extend({keySize:4,hasher:p.MD5,iterations:1}),init:function(d){this.cfg=this.cfg.extend(d)},compute:function(d,r){for(var p=this.cfg,s=p.hasher.create(),b=l.create(),u=b.words,q=p.keySize,p=p.iterations;u.length<q;){n&&s.update(n);var n=s.update(d).finalize(r);s.reset();for(var a=1;a<p;a++)n=s.finalize(n),s.reset();b.concat(n)}b.sigBytes=4*q;return b}});u.EvpKDF=function(d,l,p){return s.create(p).compute(d,l)}})();
-    CryptoJS.lib.Cipher||function(u){var p=CryptoJS,d=p.lib,l=d.Base,s=d.WordArray,t=d.BufferedBlockAlgorithm,r=p.enc.Base64,w=p.algo.EvpKDF,v=d.Cipher=t.extend({cfg:l.extend(),createEncryptor:function(e,a){return this.create(this._ENC_XFORM_MODE,e,a)},createDecryptor:function(e,a){return this.create(this._DEC_XFORM_MODE,e,a)},init:function(e,a,b){this.cfg=this.cfg.extend(b);this._xformMode=e;this._key=a;this.reset()},reset:function(){t.reset.call(this);this._doReset()},process:function(e){this._append(e);return this._process()},finalize:function(e){e&&this._append(e);return this._doFinalize()},keySize:4,ivSize:4,_ENC_XFORM_MODE:1,_DEC_XFORM_MODE:2,_createHelper:function(e){return{encrypt:function(b,k,d){return("string"==typeof k?c:a).encrypt(e,b,k,d)},decrypt:function(b,k,d){return("string"==typeof k?c:a).decrypt(e,b,k,d)}}}});d.StreamCipher=v.extend({_doFinalize:function(){return this._process(!0)},blockSize:1});var b=p.mode={},x=function(e,a,b){var c=this._iv;c?this._iv=u:c=this._prevBlock;for(var d=0;d<b;d++)e[a+d]^=c[d]},q=(d.BlockCipherMode=l.extend({createEncryptor:function(e,a){return this.Encryptor.create(e,a)},createDecryptor:function(e,a){return this.Decryptor.create(e,a)},init:function(e,a){this._cipher=e;this._iv=a}})).extend();q.Encryptor=q.extend({processBlock:function(e,a){var b=this._cipher,c=b.blockSize;x.call(this,e,a,c);b.encryptBlock(e,a);this._prevBlock=e.slice(a,a+c)}});q.Decryptor=q.extend({processBlock:function(e,a){var b=this._cipher,c=b.blockSize,d=e.slice(a,a+c);b.decryptBlock(e,a);x.call(this,e,a,c);this._prevBlock=d}});b=b.CBC=q;q=(p.pad={}).Pkcs7={pad:function(a,b){for(var c=4*b,c=c-a.sigBytes%c,d=c<<24|c<<16|c<<8|c,l=[],n=0;n<c;n+=4)l.push(d);c=s.create(l,c);a.concat(c)},unpad:function(a){a.sigBytes-=a.words[a.sigBytes-1>>>2]&255}};d.BlockCipher=v.extend({cfg:v.cfg.extend({mode:b,padding:q}),reset:function(){v.reset.call(this);var a=this.cfg,b=a.iv,a=a.mode;if(this._xformMode==this._ENC_XFORM_MODE)var c=a.createEncryptor;else c=a.createDecryptor,this._minBufferSize=1;this._mode=c.call(a,this,b&&b.words)},_doProcessBlock:function(a,b){this._mode.processBlock(a,b)},_doFinalize:function(){var a=this.cfg.padding;if(this._xformMode==this._ENC_XFORM_MODE){a.pad(this._data,this.blockSize);var b=this._process(!0)}else b=this._process(!0),a.unpad(b);return b},blockSize:4});var n=d.CipherParams=l.extend({init:function(a){this.mixIn(a)},toString:function(a){return(a||this.formatter).stringify(this)}}),b=(p.format={}).OpenSSL={stringify:function(a){var b=a.ciphertext;a=a.salt;return(a?s.create([1398893684,1701076831]).concat(a).concat(b):b).toString(r)},parse:function(a){a=r.parse(a);var b=a.words;if(1398893684==b[0]&&1701076831==b[1]){var c=s.create(b.slice(2,4));b.splice(0,4);a.sigBytes-=16}return n.create({ciphertext:a,salt:c})}},a=d.SerializableCipher=l.extend({cfg:l.extend({format:b}),encrypt:function(a,b,c,d){d=this.cfg.extend(d);var l=a.createEncryptor(c,d);b=l.finalize(b);l=l.cfg;return n.create({ciphertext:b,key:c,iv:l.iv,algorithm:a,mode:l.mode,padding:l.padding,blockSize:a.blockSize,formatter:d.format})},decrypt:function(a,b,c,d){d=this.cfg.extend(d);b=this._parse(b,d.format);return a.createDecryptor(c,d).finalize(b.ciphertext)},_parse:function(a,b){return"string"==typeof a?b.parse(a,this):a}}),p=(p.kdf={}).OpenSSL={execute:function(a,b,c,d){d||(d=s.random(8));a=w.create({keySize:b+c}).compute(a,d);c=s.create(a.words.slice(b),4*c);a.sigBytes=4*b;return n.create({key:a,iv:c,salt:d})}},c=d.PasswordBasedCipher=a.extend({cfg:a.cfg.extend({kdf:p}),encrypt:function(b,c,d,l){l=this.cfg.extend(l);d=l.kdf.execute(d,b.keySize,b.ivSize);l.iv=d.iv;b=a.encrypt.call(this,b,c,d.key,l);b.mixIn(d);return b},decrypt:function(b,c,d,l){l=this.cfg.extend(l);c=this._parse(c,l.format);d=l.kdf.execute(d,b.keySize,b.ivSize,c.salt);l.iv=d.iv;return a.decrypt.call(this,b,c,d.key,l)}})}();
-    (function(){for(var u=CryptoJS,p=u.lib.BlockCipher,d=u.algo,l=[],s=[],t=[],r=[],w=[],v=[],b=[],x=[],q=[],n=[],a=[],c=0;256>c;c++)a[c]=128>c?c<<1:c<<1^283;for(var e=0,j=0,c=0;256>c;c++){var k=j^j<<1^j<<2^j<<3^j<<4,k=k>>>8^k&255^99;l[e]=k;s[k]=e;var z=a[e],F=a[z],G=a[F],y=257*a[k]^16843008*k;t[e]=y<<24|y>>>8;r[e]=y<<16|y>>>16;w[e]=y<<8|y>>>24;v[e]=y;y=16843009*G^65537*F^257*z^16843008*e;b[k]=y<<24|y>>>8;x[k]=y<<16|y>>>16;q[k]=y<<8|y>>>24;n[k]=y;e?(e=z^a[a[a[G^z]]],j^=a[a[j]]):e=j=1}var H=[0,1,2,4,8,16,32,64,128,27,54],d=d.AES=p.extend({_doReset:function(){for(var a=this._key,c=a.words,d=a.sigBytes/4,a=4*((this._nRounds=d+6)+1),e=this._keySchedule=[],j=0;j<a;j++)if(j<d)e[j]=c[j];else{var k=e[j-1];j%d?6<d&&4==j%d&&(k=l[k>>>24]<<24|l[k>>>16&255]<<16|l[k>>>8&255]<<8|l[k&255]):(k=k<<8|k>>>24,k=l[k>>>24]<<24|l[k>>>16&255]<<16|l[k>>>8&255]<<8|l[k&255],k^=H[j/d|0]<<24);e[j]=e[j-d]^k}c=this._invKeySchedule=[];for(d=0;d<a;d++)j=a-d,k=d%4?e[j]:e[j-4],c[d]=4>d||4>=j?k:b[l[k>>>24]]^x[l[k>>>16&255]]^q[l[k>>>8&255]]^n[l[k&255]]},encryptBlock:function(a,b){this._doCryptBlock(a,b,this._keySchedule,t,r,w,v,l)},decryptBlock:function(a,c){var d=a[c+1];a[c+1]=a[c+3];a[c+3]=d;this._doCryptBlock(a,c,this._invKeySchedule,b,x,q,n,s);d=a[c+1];a[c+1]=a[c+3];a[c+3]=d},_doCryptBlock:function(a,b,c,d,e,j,l,f){for(var m=this._nRounds,g=a[b]^c[0],h=a[b+1]^c[1],k=a[b+2]^c[2],n=a[b+3]^c[3],p=4,r=1;r<m;r++)var q=d[g>>>24]^e[h>>>16&255]^j[k>>>8&255]^l[n&255]^c[p++],s=d[h>>>24]^e[k>>>16&255]^j[n>>>8&255]^l[g&255]^c[p++],t=d[k>>>24]^e[n>>>16&255]^j[g>>>8&255]^l[h&255]^c[p++],n=d[n>>>24]^e[g>>>16&255]^j[h>>>8&255]^l[k&255]^c[p++],g=q,h=s,k=t;q=(f[g>>>24]<<24|f[h>>>16&255]<<16|f[k>>>8&255]<<8|f[n&255])^c[p++];s=(f[h>>>24]<<24|f[k>>>16&255]<<16|f[n>>>8&255]<<8|f[g&255])^c[p++];t=(f[k>>>24]<<24|f[n>>>16&255]<<16|f[g>>>8&255]<<8|f[h&255])^c[p++];n=(f[n>>>24]<<24|f[g>>>16&255]<<16|f[h>>>8&255]<<8|f[k&255])^c[p++];a[b]=q;a[b+1]=s;a[b+2]=t;a[b+3]=n},keySize:8});u.AES=p._createHelper(d)})();
-
-    const key = CryptoJS.enc.Utf8.parse(keyStr);
-    const iv = CryptoJS.enc.Utf8.parse(ivStr);
-    const decrypted = CryptoJS.AES.decrypt(data, key, { iv: iv, mode: CryptoJS.mode.CBC });
-    return CryptoJS.enc.Utf8.stringify(decrypted).toString();
+    return bangumi;
   }
 
   async watch(url) {
-    const pageHtml = await this.req(url);
-    const dataVideoList = await this.querySelectorAll(pageHtml, "li[data-video]");
-    let embedUrl = "";
-
-    for (const item of dataVideoList) {
-      const html = await item.content;
-      const vUrl = await this.getAttributeText(html, "li", "data-video");
-      if (vUrl && vUrl.includes("vidbasic")) {
-        embedUrl = vUrl.startsWith("//") ? "https:" + vUrl : vUrl;
-        break;
-      }
+    const cleanUrl = url.replace(/^\//, "");
+    let res = "";
+    try {
+      res = await this.req(`/${cleanUrl}`);
+    } catch (e) {
+      // ignore
     }
 
-    if (!embedUrl) {
-      const iframeSrc = await this.getAttributeText(pageHtml, "iframe", "src");
-      if (iframeSrc) {
-        embedUrl = iframeSrc.startsWith("//") ? "https:" + iframeSrc : iframeSrc;
+    let embedUrl = "";
+    if (res) {
+      const dataVideoMatches = res.match(/data-video="([^"]+)"/g) || [];
+      for (const item of dataVideoMatches) {
+        const vUrl = item.match(/data-video="([^"]+)"/)[1];
+        if (vUrl && vUrl.includes("vidbasic")) {
+          embedUrl = vUrl.startsWith("//") ? "https:" + vUrl : vUrl;
+          break;
+        }
+      }
+      if (!embedUrl) {
+        const iframeMatch = res.match(/<iframe[\s\S]*?src="([^"]+)"/i);
+        if (iframeMatch) {
+          const iframeSrc = iframeMatch[1];
+          embedUrl = iframeSrc.startsWith("//") ? "https:" + iframeSrc : iframeSrc;
+        }
       }
     }
 
@@ -141,11 +187,12 @@ export default class extends Extension {
       },
     });
 
-    const playerIframe = await this.getAttributeText(embedRes, "iframe#embedvideo", "src");
-    let playerUrl = playerIframe || "";
+    const playerIframeMatch = embedRes.match(/<iframe[^>]*id="embedvideo"[^>]*src="([^"]+)"/i) || embedRes.match(/<iframe[^>]*src="([^"]+)"/i);
+    let playerUrl = playerIframeMatch ? playerIframeMatch[1].trim() : "";
     if (playerUrl && playerUrl.startsWith("/")) {
-      const urlObj = new URL(embedUrl);
-      playerUrl = urlObj.origin + playerUrl;
+      const parts = embedUrl.split("/");
+      const origin = parts[0] + "//" + parts[2];
+      playerUrl = origin + playerUrl;
     }
 
     if (!playerUrl) {
@@ -165,21 +212,23 @@ export default class extends Extension {
       throw new Error("Crypto data not found in player page");
     }
 
-    const cryptoData = cryptoMatch[1];
-    const keyMatch = playerRes.match(/key=CryptoJS\[[^\]]+\]\[[^\]]+\]\[[^\]]+\]\(([^)]+)\)/);
-    const ivMatch = playerRes.match(/iv=CryptoJS\[[^\]]+\]\[[^\]]+\]\[[^\]]+\]\(([^)]+)\)/);
-
+    const encryptedData = cryptoMatch[1];
     let keyStr = "94588293375053432799222445521289";
     let ivStr = "5259228356829423";
 
+    const keyMatch = playerRes.match(/key=CryptoJS\[[^\]]+\]\[[^\]]+\]\[[^\]]+\]\(([^)]+)\)/);
+    const ivMatch = playerRes.match(/iv=CryptoJS\[[^\]]+\]\[[^\]]+\]\[[^\]]+\]\(([^)]+)\)/);
+
     if (keyMatch && keyMatch[1]) {
-      keyStr = keyMatch[1].replace(/['"\s+]/g, "");
+      const parsed = keyMatch[1].replace(/['"\s+]/g, "");
+      if (parsed) keyStr = parsed;
     }
     if (ivMatch && ivMatch[1]) {
-      ivStr = ivMatch[1].replace(/['"\s+]/g, "");
+      const parsed = ivMatch[1].replace(/['"\s+]/g, "");
+      if (parsed) ivStr = parsed;
     }
 
-    const streamUrl = this.decryptVidBasic(cryptoData, keyStr, ivStr);
+    const streamUrl = await this.decryptAesCbc(encryptedData, keyStr, ivStr);
 
     return {
       type: "hls",
@@ -190,5 +239,166 @@ export default class extends Extension {
         "Referer": "https://vidbasic.top/",
       },
     };
+  }
+
+  async decryptAesCbc(base64Data, keyStr, ivStr) {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    const b64decode = (str) => {
+      let strClean = str.replace(/=+$/, "");
+      let bytes = [];
+      for (let i = 0; i < strClean.length; i += 4) {
+        let b1 = chars.indexOf(strClean.charAt(i));
+        let b2 = chars.indexOf(strClean.charAt(i + 1));
+        let b3 = chars.indexOf(strClean.charAt(i + 2));
+        let b4 = chars.indexOf(strClean.charAt(i + 3));
+        let c1 = (b1 << 2) | (b2 >> 4);
+        let c2 = ((b2 & 15) << 4) | (b3 >> 2);
+        let c3 = ((b3 & 3) << 6) | b4;
+        bytes.push(c1);
+        if (b3 !== -1) bytes.push(c2);
+        if (b4 !== -1) bytes.push(c3);
+      }
+      return new Uint8Array(bytes);
+    };
+
+    const strToBytes = (str) => {
+      let bytes = new Uint8Array(str.length);
+      for (let i = 0; i < str.length; i++) {
+        bytes[i] = str.charCodeAt(i);
+      }
+      return bytes;
+    };
+
+    const cipherBytes = b64decode(base64Data);
+    const keyBytes = strToBytes(keyStr);
+    const ivBytes = strToBytes(ivStr);
+
+    if (typeof crypto !== "undefined" && crypto.subtle) {
+      const key = await crypto.subtle.importKey(
+        "raw",
+        keyBytes,
+        { name: "AES-CBC" },
+        false,
+        ["decrypt"]
+      );
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-CBC", iv: ivBytes },
+        key,
+        cipherBytes
+      );
+      const decBytes = new Uint8Array(decrypted);
+      return new TextDecoder("utf-8").decode(decBytes);
+    }
+
+    const S = [
+      0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
+      0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
+      0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
+      0x04, 0xc7, 0x23, 0xc3, 0x18, 0x96, 0x05, 0x9a, 0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75,
+      0x09, 0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0, 0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3, 0x2f, 0x84,
+      0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b, 0x6a, 0xcb, 0xbe, 0x39, 0x4a, 0x4c, 0x58, 0xcf,
+      0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85, 0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8,
+      0x51, 0xa3, 0x40, 0x8f, 0x92, 0x9d, 0x38, 0xf5, 0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2,
+      0xcd, 0x0c, 0x13, 0xec, 0x5f, 0x97, 0x44, 0x17, 0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19, 0x73,
+      0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88, 0x46, 0xee, 0xb8, 0x14, 0xde, 0x5e, 0x0b, 0xdb,
+      0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c, 0xc2, 0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79,
+      0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5, 0x4e, 0xa9, 0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08,
+      0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+      0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
+      0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
+      0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
+    ];
+
+    const Si = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) Si[S[i]] = i;
+
+    const Rcon = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36];
+
+    const w = new Uint32Array(44);
+    for (let i = 0; i < 8; i++) {
+      w[i] = (keyBytes[4 * i] << 24) | (keyBytes[4 * i + 1] << 16) | (keyBytes[4 * i + 2] << 8) | keyBytes[4 * i + 3];
+    }
+    for (let i = 8; i < 44; i++) {
+      let temp = w[i - 1];
+      if (i % 8 === 0) {
+        temp = (temp << 8) | (temp >>> 24);
+        temp = (S[(temp >>> 24) & 0xff] << 24) | (S[(temp >>> 16) & 0xff] << 16) | (S[(temp >>> 8) & 0xff] << 8) | S[temp & 0xff];
+        temp ^= Rcon[i / 8] << 24;
+      } else if (i % 8 === 4) {
+        temp = (S[(temp >>> 24) & 0xff] << 24) | (S[(temp >>> 16) & 0xff] << 16) | (S[(temp >>> 8) & 0xff] << 8) | S[temp & 0xff];
+      }
+      w[i] = w[i - 8] ^ temp;
+    }
+
+    const mul = (a, b) => {
+      let p = 0;
+      for (let i = 0; i < 8; i++) {
+        if (b & 1) p ^= a;
+        let hi = a & 0x80;
+        a = (a << 1) & 0xff;
+        if (hi) a ^= 0x1b;
+        b >>= 1;
+      }
+      return p;
+    };
+
+    const invMixColumns = (state) => {
+      for (let c = 0; c < 4; c++) {
+        let s0 = state[c], s1 = state[4 + c], s2 = state[8 + c], s3 = state[12 + c];
+        state[c] = mul(s0, 0x0e) ^ mul(s1, 0x0b) ^ mul(s2, 0x0d) ^ mul(s3, 0x09);
+        state[4 + c] = mul(s0, 0x09) ^ mul(s1, 0x0e) ^ mul(s2, 0x0b) ^ mul(s3, 0x0d);
+        state[8 + c] = mul(s0, 0x0d) ^ mul(s1, 0x09) ^ mul(s2, 0x0e) ^ mul(s3, 0x0b);
+        state[12 + c] = mul(s0, 0x0b) ^ mul(s1, 0x0d) ^ mul(s2, 0x09) ^ mul(s3, 0x0e);
+      }
+    };
+
+    const decryptBlock = (block, out) => {
+      let state = new Uint8Array(16);
+      for (let i = 0; i < 16; i++) state[i] = block[i];
+
+      for (let i = 0; i < 16; i++) {
+        state[i] ^= (w[40 + (i % 4)] >>> (24 - 8 * Math.floor(i / 4))) & 0xff;
+      }
+
+      for (let round = 13; round >= 0; round--) {
+        let tmp = new Uint8Array(16);
+        tmp[0] = Si[state[0]]; tmp[4] = Si[state[4]]; tmp[8] = Si[state[8]]; tmp[12] = Si[state[12]];
+        tmp[1] = Si[state[13]]; tmp[5] = Si[state[1]]; tmp[9] = Si[state[5]]; tmp[13] = Si[state[9]];
+        tmp[2] = Si[state[10]]; tmp[6] = Si[state[14]]; tmp[10] = Si[state[2]]; tmp[14] = Si[state[6]];
+        tmp[3] = Si[state[7]]; tmp[7] = Si[state[11]]; tmp[11] = Si[state[15]]; tmp[15] = Si[state[3]];
+        for (let i = 0; i < 16; i++) state[i] = tmp[i];
+
+        for (let i = 0; i < 16; i++) {
+          state[i] ^= (w[round * 4 + (i % 4)] >>> (24 - 8 * Math.floor(i / 4))) & 0xff;
+        }
+
+        if (round > 0) {
+          invMixColumns(state);
+        }
+      }
+
+      for (let i = 0; i < 16; i++) out[i] = state[i];
+    };
+
+    let decrypted = new Uint8Array(cipherBytes.length);
+    let prevBlock = ivBytes;
+    let blockOut = new Uint8Array(16);
+
+    for (let i = 0; i < cipherBytes.length; i += 16) {
+      let block = cipherBytes.subarray(i, i + 16);
+      decryptBlock(block, blockOut);
+      for (let j = 0; j < 16; j++) {
+        decrypted[i + j] = blockOut[j] ^ prevBlock[j];
+      }
+      prevBlock = block;
+    }
+
+    let padLen = decrypted[decrypted.length - 1];
+    let plainBytes = decrypted.subarray(0, decrypted.length - padLen);
+    let str = "";
+    for (let i = 0; i < plainBytes.length; i++) {
+      str += String.fromCharCode(plainBytes[i]);
+    }
+    return str;
   }
 }
