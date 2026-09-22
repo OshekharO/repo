@@ -54,7 +54,13 @@ export default class extends Extension {
       });
 
       if (streamRes && Array.isArray(streamRes.downloads)) {
-        episodeUrls = streamRes.downloads
+        const playableDownloads = streamRes.downloads.filter(
+          (dl) => dl && dl.url && !dl.url.includes("fastdlserver") && !dl.url.includes("gdflix")
+        );
+
+        const downloadsToUse = playableDownloads.length > 0 ? playableDownloads : streamRes.downloads;
+
+        episodeUrls = downloadsToUse
           .filter((dl) => dl && dl.url)
           .map((dl) => {
             const server = dl.server || dl.source || "Server";
