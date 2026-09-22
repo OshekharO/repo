@@ -251,6 +251,17 @@ export default class extends Extension {
         }
       }
 
+      // If iframe points to YouTube
+      if (iframeSrc.includes("youtube.com/embed/") || iframeSrc.includes("youtu.be/")) {
+        const ytIdMatch = iframeSrc.match(/embed\/([^?&"'\s>]+)/);
+        if (ytIdMatch) {
+          directUrl = `https://www.youtube.com/watch?v=${ytIdMatch[1]}`;
+          break;
+        }
+        directUrl = iframeSrc;
+        break;
+      }
+
       // If iframe points to jwplayer or embed, fetch iframe content
       if (iframeSrc.includes("jwplayer") || iframeSrc.includes("embed")) {
         const fullIframe = iframeSrc.startsWith("http") ? iframeSrc : "https://kisskh.top" + iframeSrc;
@@ -321,16 +332,11 @@ export default class extends Extension {
       }
     }
 
-    // 4. Absolute fallback to pageUrl if nothing else found
-    if (!directUrl) {
-      directUrl = pageUrl;
-    }
-
     const isHls = directUrl.includes(".m3u8");
 
     return {
       type: isHls ? "hls" : "mp4",
-      url: directUrl,
+      url: directUrl || "",
       headers: {
         Referer: "https://kisskh.top/",
         "User-Agent":
