@@ -7,7 +7,7 @@
 // @icon         https://piped.video/img/icons/android-chrome-192x192.png
 // @package      piped.video
 // @type         bangumi
-// @webSite      https://piped.video
+// @webSite      https://pipedapi.ducks.party
 // ==/MiruExtension==
 
 export default class extends Extension {
@@ -25,7 +25,7 @@ export default class extends Extension {
             key: "piped",
             type: "input",
             description: "url piped instance api",
-            defaultValue: "https://pipedapi.kavin.rocks",
+            defaultValue: "https://pipedapi.ducks.party",
         });
 
         this.registerSetting({
@@ -97,14 +97,16 @@ export default class extends Extension {
         const [videoUrl, audioUrl, videoID] = url.split("|");
         const sub = await this.req(`/streams/${videoID}`);
 
-        const subtitles = sub.subtitles.map((item) => ({
+        const subtitles = (sub.subtitles || []).map((item) => ({
             title: item.name,
             url: item.url,
             language: item.code,
         }));
 
+        const type = videoUrl.includes(".m3u8") ? "hls" : "mp4";
+
         return {
-            type: "hls",
+            type,
             url: videoUrl,
             audioTrack: audioUrl,
             subtitles: subtitles,
