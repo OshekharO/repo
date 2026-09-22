@@ -151,6 +151,38 @@ export default class extends Extension {
             }
         }
 
+        if (streamUrl) {
+            try {
+                const playlistRes = await this.request("", {
+                    headers: {
+                        "Miru-Url": streamUrl,
+                        "Referer": url,
+                    },
+                });
+
+                if (playlistRes && playlistRes.includes("#EXT-X-STREAM-INF")) {
+                    const lines = playlistRes.split("\n");
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (line.startsWith("#EXT-X-STREAM-INF")) {
+                            const subLine = lines[i + 1] ? lines[i + 1].trim() : "";
+                            if (subLine && !subLine.startsWith("#")) {
+                                if (subLine.startsWith("http")) {
+                                    streamUrl = subLine;
+                                } else {
+                                    const base = streamUrl.substring(0, streamUrl.lastIndexOf("/"));
+                                    streamUrl = `${base}/${subLine}`;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Error resolving playlist:", e);
+            }
+        }
+
         return {
             type: "hls",
             url: streamUrl || url,
