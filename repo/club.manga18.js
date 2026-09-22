@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         manga18.club
-// @version      v0.0.3
+// @version      v0.0.4
 // @author       vvsolo
 // @lang         all
 // @license      MIT
@@ -19,10 +19,6 @@ export default class extends Extension {
 			'[zh-CN]hanman18.com': 'https://hanman18.com',
 			'[fr]tumanhwas.club': 'https://tumanhwas.club',
 			'[fr]leercapitulo.net': 'https://leercapitulo.net',
-			//'[en]comic1000.com': 'https://comic1000.com',
-			//'[en]18porncomic.com': 'https://18porncomic.com',
-			//'[en]manga18.us': 'https://manga18.us',
-			//'[en]manhuascan.us': 'https://manhuascan.us',
 		},
 		uptime: 0,
 		expire: 5,
@@ -71,7 +67,7 @@ export default class extends Extension {
 
 	async search(kw, page, filter) {
 		const filt = filter?.data && filter.data[0] || 'All';
-		let seaKW = filt === 'All' ? `/page/${page}/` : `/${filt}/${page}/`;
+		let seaKW = filt === 'All' ? `/list-manga/${page}` : `/${filt}/${page}`;
 		if (kw) {
 			seaKW += `?s=${encodeURIComponent(kw)}`;
 		}
@@ -80,8 +76,12 @@ export default class extends Extension {
 
 	async detail(url) {
 		const res = await this.req(url);
-		const title = await this.querySelector(res, '.detail_name > h1').text;
-		const desc = await this.querySelector(res, '.detail_reviewContent').text;
+		const titleEl = await this.querySelector(res, '.detail_name > h1, .detail_name');
+		const title = titleEl ? (await titleEl.text).trim() : '';
+
+		const descEl = await this.querySelector(res, '.detail_reviewContent');
+		const desc = descEl ? (await descEl.text).trim() : '';
+
 		const imgs = await this.queryAll(res, '.chapter_box .item > a', async (html) => {
 			return {
 				name: (await this.querySelector(html, 'a').text || '').trim(),
@@ -95,9 +95,9 @@ export default class extends Extension {
 				await this.querySelector(html, '.info_value > span').text || '');
 			return `${_label.trim()}: ${_value.trim()}`;
 		}) || [];
-		subtitle.push(desc.trim());
+		subtitle.push(desc);
 		return {
-			title: title.trim(),
+			title,
 			cover,
 			desc: subtitle.join('\n'),
 			episodes: [
@@ -112,7 +112,7 @@ export default class extends Extension {
 	async watch(url) {
 		const atob = (base64) => CryptoJS.enc.Base64.parse(base64).toString(CryptoJS.enc.Utf8);
 		const res = await this.req(url);
-		const baseUrl = this.getSetting('source');
+		const baseUrl = await this.getSetting('source');
 		let urls;
 		if ((urls = res.match(/"(?:aHR0|L3By)[^"]+"/g))) {
 			urls = urls.map(v => {
@@ -133,10 +133,14 @@ export default class extends Extension {
 	
 	async req(path) {
 		const baseUrl = await this.getSetting('source');
-		if (~path.indexOf(baseUrl)) path = path.replace(baseUrl, '');
+		let cleanPath = path;
+		if (~cleanPath.indexOf(baseUrl)) cleanPath = cleanPath.replace(baseUrl, '');
+		if (!cleanPath.startsWith('/')) cleanPath = '/' + cleanPath;
 		return await this.request('', {
 			headers: {
-				'Miru-Url': baseUrl + path
+				'Miru-Url': baseUrl + cleanPath,
+				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+				'Referer': baseUrl + '/',
 			}
 		});
 	}
@@ -149,7 +153,7 @@ export default class extends Extension {
 		}
 		const res = await this.req(path);
 		const mangas = await this.queryAll(res, 'div.story_item > div.story_images', async (html) => {
-			const title = await this.getAttributeText(html, 'a', 'title');
+			const title = (await this.getAttributeText(html, 'a', 'title')) || (await this.getAttributeText(html, 'img', 'alt')) || '';
 			const url = await this.getAttributeText(html, 'a', 'href');
 			const cover = await this.getAttributeText(html, 'img', 'src');
 			this.#cache.get('@cover')[url] = cover;
@@ -159,7 +163,6 @@ export default class extends Extension {
 				cover
 			}
 		})
-		//this.#cache.clear();
 		this.#cache.set(md5path, mangas);
 		this.#opts.uptime = Date.now();
 		return mangas;
