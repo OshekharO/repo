@@ -96,6 +96,19 @@ export default class extends Extension {
         };
     }
 
+    unpack(p, a, c, k) {
+        const toBase = (n, b) => {
+            const chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            return n < b ? chars[n] : toBase(Math.floor(n / b), b) + chars[n % b];
+        };
+        while (c--) {
+            if (k[c]) {
+                p = p.replace(new RegExp("\\b" + toBase(c, a) + "\\b", "g"), k[c]);
+            }
+        }
+        return p;
+    }
+
     async watch(url) {
         if (!url) {
             return {
@@ -111,12 +124,36 @@ export default class extends Extension {
             },
         });
 
-        const m3u8Match = res.match(/file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/) || res.match(/(https?:\/\/[^\s"']+\.m3u8[^\s"']*)/);
-        const streamUrl = m3u8Match ? m3u8Match[1] : url;
+        let streamUrl = "";
+
+        // Check packed JS (VidHide / Morencius / etc.)
+        const packedMatch = res.match(/}\s*\('([\s\S]+?)',\s*(\d+),\s*(\d+),\s*'([\s\S]+?)'\.split\('\|'\)/);
+        if (packedMatch) {
+            try {
+                const p = packedMatch[1];
+                const a = parseInt(packedMatch[2]);
+                const c = parseInt(packedMatch[3]);
+                const k = packedMatch[4].split("|");
+                const unpacked = this.unpack(p, a, c, k);
+                const m3u8Match = unpacked.match(/https?:\/\/[^\s"']+\.m3u8[^\s"']*/);
+                if (m3u8Match) {
+                    streamUrl = m3u8Match[0];
+                }
+            } catch (e) {
+                console.error("Failed to unpack JS:", e);
+            }
+        }
+
+        if (!streamUrl) {
+            const m3u8Match = res.match(/file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/) || res.match(/(https?:\/\/[^\s"']+\.m3u8[^\s"']*)/);
+            if (m3u8Match) {
+                streamUrl = m3u8Match[1];
+            }
+        }
 
         return {
             type: "hls",
-            url: streamUrl,
+            url: streamUrl || url,
             headers: {
                 "Referer": url,
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
