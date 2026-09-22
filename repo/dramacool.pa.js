@@ -314,20 +314,23 @@ export default class extends Extension {
 
     const Rcon = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36];
 
-    const w = new Uint32Array(44);
-    for (let i = 0; i < 8; i++) {
+    const Nk = keyBytes.length / 4;
+    const Nr = Nk + 6;
+
+    const w = new Uint32Array(4 * (Nr + 1));
+    for (let i = 0; i < Nk; i++) {
       w[i] = (keyBytes[4 * i] << 24) | (keyBytes[4 * i + 1] << 16) | (keyBytes[4 * i + 2] << 8) | keyBytes[4 * i + 3];
     }
-    for (let i = 8; i < 44; i++) {
+    for (let i = Nk; i < 4 * (Nr + 1); i++) {
       let temp = w[i - 1];
-      if (i % 8 === 0) {
+      if (i % Nk === 0) {
         temp = (temp << 8) | (temp >>> 24);
         temp = (S[(temp >>> 24) & 0xff] << 24) | (S[(temp >>> 16) & 0xff] << 16) | (S[(temp >>> 8) & 0xff] << 8) | S[temp & 0xff];
-        temp ^= Rcon[i / 8] << 24;
-      } else if (i % 8 === 4) {
+        temp ^= Rcon[i / Nk] << 24;
+      } else if (Nk > 6 && i % Nk === 4) {
         temp = (S[(temp >>> 24) & 0xff] << 24) | (S[(temp >>> 16) & 0xff] << 16) | (S[(temp >>> 8) & 0xff] << 8) | S[temp & 0xff];
       }
-      w[i] = w[i - 8] ^ temp;
+      w[i] = w[i - Nk] ^ temp;
     }
 
     const mul = (a, b) => {
@@ -357,10 +360,10 @@ export default class extends Extension {
       for (let i = 0; i < 16; i++) state[i] = block[i];
 
       for (let i = 0; i < 16; i++) {
-        state[i] ^= (w[40 + (i % 4)] >>> (24 - 8 * Math.floor(i / 4))) & 0xff;
+        state[i] ^= (w[4 * Nr + (i % 4)] >>> (24 - 8 * Math.floor(i / 4))) & 0xff;
       }
 
-      for (let round = 13; round >= 0; round--) {
+      for (let round = Nr - 1; round >= 0; round--) {
         let tmp = new Uint8Array(16);
         tmp[0] = Si[state[0]]; tmp[4] = Si[state[4]]; tmp[8] = Si[state[8]]; tmp[12] = Si[state[12]];
         tmp[1] = Si[state[13]]; tmp[5] = Si[state[1]]; tmp[9] = Si[state[5]]; tmp[13] = Si[state[9]];
