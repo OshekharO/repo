@@ -1,13 +1,13 @@
 // ==MiruExtension==
 // @name         LayarKaca
-// @version      v0.0.2
+// @version      v0.0.3
 // @author       OshekharO
 // @lang         id
 // @license      MIT
 // @package      lk21official
 // @type         bangumi
 // @icon         https://s8.lk21static.xyz/wp-content/themes/dunia21/images/favicon-set/apple-icon-144x144.png
-// @webSite      https://tv3.lk21official.wiki
+// @webSite      https://tv12.lk21official.cc
 // @nsfw         false
 // ==/MiruExtension==
 
@@ -47,8 +47,8 @@ export default class extends Extension {
       if (!/season|episode|series/i.test(title)) {
         novel.push({
           title,
-          url: "https://tv3.lk21official.wiki" + url,
-          cover: "https://tv3.lk21official.wiki" + cover,
+          url: "https://tv12.lk21official.cc" + url,
+          cover: "https://tv12.lk21official.cc" + cover,
         });
       }
     }
