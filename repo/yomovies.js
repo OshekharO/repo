@@ -78,7 +78,7 @@ export default class extends Extension {
     const title = await this.querySelector(res, "meta[property='og:title']").getAttributeText("content");
     const cover = await this.querySelector(res, "img[itemprop='image']").getAttributeText("src");
     const desc = await this.querySelector(res, "p.f-desc").text;
-    const episodeUrl = res.match(/https:\/\/minoplres\.[^\s'"]+/);
+    const episodeUrl = res.match(/https:\/\/(?:minoplres|speedostream[0-9]*)\.[^\s'"]+/);
 
     return {
       title: title.trim(),
@@ -102,7 +102,7 @@ export default class extends Extension {
     const res = await this.request("", {
       headers: {
         "Miru-Url": url,
-        Referer: "https://minoplres.xyz/",
+        Referer: "https://yomovies.church/",
       },
     });
 
