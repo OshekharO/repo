@@ -44,6 +44,41 @@ export default class extends Extension {
 
   async detail(url) {
     const res = await this.req(`/movie/${url}?language=en-US&api_key=9990db75d12d4ecd4ed84628ebc96403`);
+    let episodeUrls = [];
+
+    try {
+      const streamRes = await this.request("", {
+        headers: {
+          "Miru-Url": `https://streamrip.fun/api/download/movie/${url}`,
+        },
+      });
+
+      if (streamRes && Array.isArray(streamRes.downloads)) {
+        episodeUrls = streamRes.downloads.map((dl) => {
+          const server = dl.server || dl.source || "Server";
+          const parts = [server];
+          if (dl.quality) parts.push(`${dl.quality}p`);
+          if (dl.size) parts.push(`(${dl.size})`);
+
+          return {
+            name: parts.join(" - "),
+            url: dl.url,
+          };
+        });
+      }
+    } catch (e) {
+      console.log(e);
+    }
+
+    if (episodeUrls.length === 0) {
+      episodeUrls = [
+        {
+          name: `Watch ${res.title}`,
+          url: res.id.toString(),
+        },
+      ];
+    }
+
     return {
       title: res.title,
       cover: "https://image.tmdb.org/t/p/w300" + res.poster_path,
@@ -51,12 +86,7 @@ export default class extends Extension {
       episodes: [
         {
           title: "Ep",
-          urls: [
-            {
-              name: `Watch ${res.title}`,
-              url: res.id.toString(),
-            },
-          ],
+          urls: episodeUrls,
         },
       ],
     };
@@ -77,6 +107,13 @@ export default class extends Extension {
   }
 
   async watch(url) {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return {
+        type: url.includes(".m3u8") ? "hls" : "mp4",
+        url: url,
+      };
+    }
+
     const res = await this.request("", {
       headers: {
         "Miru-Url": `https://streamrip.fun/api/download/movie/${url}`,
@@ -84,18 +121,7 @@ export default class extends Extension {
     });
 
     const downloads = res?.downloads || [];
-    const validDownload = downloads.find((item) => {
-      if (!item || !item.url) return false;
-      const server = (item.server || "").toLowerCase();
-      const source = (item.source || "").toLowerCase();
-      if (server.includes("uhdmovies") || source.includes("uhdmovies") || server.includes("instantdl") || server.includes("resumecloud")) {
-        return false;
-      }
-      const cleanUrl = item.url.split("?")[0].toLowerCase();
-      return cleanUrl.endsWith(".m3u8") || cleanUrl.endsWith(".mkv") || cleanUrl.endsWith(".mp4") || cleanUrl.includes(".m3u8") || cleanUrl.includes(".mkv") || cleanUrl.includes(".mp4");
-    });
-
-    const downloadUrl = validDownload ? validDownload.url : downloads[0]?.url || "";
+    const downloadUrl = downloads[0]?.url || "";
 
     return {
       type: downloadUrl.includes(".m3u8") ? "hls" : "mp4",
