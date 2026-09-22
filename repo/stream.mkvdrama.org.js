@@ -109,9 +109,10 @@ export default class extends Extension {
   }
 
   async detail(url) {
+    const fullUrl = url.startsWith("http") ? url : "https://kisskh.top" + url;
     const res = await this.request("", {
       headers: {
-        "Miru-Url": url.startsWith("http") ? url : "https://kisskh.top" + url,
+        "Miru-Url": fullUrl,
       },
     });
 
@@ -133,10 +134,9 @@ export default class extends Extension {
       desc = await descElem.text;
     }
 
-    const fullUrl = url.startsWith("http") ? url : "https://kisskh.top" + url;
-
-    // Check for episode links in ul.episodios or #episodes or links containing /episodes/
     const episodeList = [];
+
+    // 1. Check for episode elements in HTML if present
     const episodeElems = await this.querySelectorAll(res, "#episodes li, ul.episodios li, .num-epi a");
     if (episodeElems && episodeElems.length > 0) {
       for (const ep of episodeElems) {
@@ -156,6 +156,34 @@ export default class extends Extension {
       }
     }
 
+    // 2. If no episode elements in HTML, check episode count in page metadata
+    if (episodeList.length === 0) {
+      let epCount = 0;
+      const epMatch = res.match(/Episodes<\/b>\s*<span class=["']valor["']>(\d+)<\/span>/i) ||
+                      res.match(/Episodes<\/span>\s*<span class=["']valor["']>(\d+)<\/span>/i);
+      if (epMatch) {
+        epCount = parseInt(epMatch[1], 10);
+      }
+
+      if (!epCount) {
+        const titleMatch = res.match(/\[(?:END|E)\s*(\d+)\]/i);
+        if (titleMatch) {
+          epCount = parseInt(titleMatch[1], 10);
+        }
+      }
+
+      if (epCount > 0) {
+        const baseUrl = fullUrl.replace(/\/$/, "");
+        for (let i = 1; i <= epCount; i++) {
+          episodeList.push({
+            name: `Episode ${i}`,
+            url: `${baseUrl}/${i}/`,
+          });
+        }
+      }
+    }
+
+    // 3. Default fallback
     if (episodeList.length === 0) {
       episodeList.push({
         name: "Full Video",
