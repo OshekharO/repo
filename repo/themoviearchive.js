@@ -179,6 +179,9 @@ export default class extends Extension {
       if (finalUrl.includes("nebula.to") || finalUrl.includes("jabroni.mov") || finalUrl.includes("wootly") || finalUrl.includes("goojara")) {
         referer = "https://ww1.goojara.to/";
         origin = "https://ww1.goojara.to";
+      } else if (finalUrl.includes("fastdl") || finalUrl.includes("gdflix")) {
+        referer = "https://dl.fastdlserver.site/";
+        origin = "https://dl.fastdlserver.site";
       }
 
       return {
