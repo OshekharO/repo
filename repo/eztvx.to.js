@@ -1,7 +1,7 @@
 // ==MiruExtension==
 // @name         EZTV
 // @version      v0.0.1
-// @author       Miru
+// @author       OshekharO
 // @lang         en
 // @license      MIT
 // @icon         https://eztvx.to/favicon.ico
