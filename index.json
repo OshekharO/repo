@@ -1132,8 +1132,8 @@
   "package": "omegascans.org",
   "type": "manga",
   "url": "omegascans.org.js",
-  "version": "v0.0.3",
-  "webSite": "https://omegascans.org"
+  "version": "v0.0.2",
+  "webSite": "https://api.omegascans.org"
  },
  {
   "author": "OshekharO",
