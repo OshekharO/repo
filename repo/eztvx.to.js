@@ -111,22 +111,18 @@ export default class extends Extension {
     const res = await this.request(`/api/get-torrents?limit=30&page=${page}`);
     if (!res || !res.torrents) return [];
 
-    return Promise.all(
-      res.torrents.map(async (item) => {
-        const sizeStr = this.formatSize(item.size_bytes);
-        const updateText = `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`;
+    return res.torrents.map((item) => {
+      const sizeStr = this.formatSize(item.size_bytes);
+      const updateText = `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`;
+      const urlKey = item.imdb_id && item.imdb_id !== "0" ? `imdb:${item.imdb_id}` : `id:${item.id}`;
 
-        const meta = await this.getMetadata(item.imdb_id, item.title || item.filename);
-        const cover = meta.cover || this.formatEztvScreenshot(item);
-
-        return {
-          title: item.title || item.filename,
-          url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
-          cover: cover,
-          update: updateText,
-        };
-      })
-    );
+      return {
+        title: item.title || item.filename,
+        url: urlKey,
+        cover: this.formatEztvScreenshot(item),
+        update: updateText,
+      };
+    });
   }
 
   async search(kw, page) {
@@ -136,20 +132,15 @@ export default class extends Extension {
       const res = await this.request(`/api/get-torrents?imdb_id=${imdbId}&page=${page}`);
       if (!res || !res.torrents) return [];
 
-      return Promise.all(
-        res.torrents.map(async (item) => {
-          const sizeStr = this.formatSize(item.size_bytes);
-          const meta = await this.getMetadata(item.imdb_id, item.title || item.filename);
-          const cover = meta.cover || this.formatEztvScreenshot(item);
-
-          return {
-            title: item.title || item.filename,
-            url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
-            cover: cover,
-            update: `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`,
-          };
-        })
-      );
+      return res.torrents.map((item) => {
+        const sizeStr = this.formatSize(item.size_bytes);
+        return {
+          title: item.title || item.filename,
+          url: item.imdb_id && item.imdb_id !== "0" ? `imdb:${item.imdb_id}` : `id:${item.id}`,
+          cover: this.formatEztvScreenshot(item),
+          update: `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`,
+        };
+      });
     }
 
     const res = await this.request(`/api/get-torrents?limit=30&page=${page}`);
@@ -161,28 +152,36 @@ export default class extends Extension {
       return title.includes(lowerKw);
     });
 
-    return Promise.all(
-      filtered.map(async (item) => {
-        const sizeStr = this.formatSize(item.size_bytes);
-        const meta = await this.getMetadata(item.imdb_id, item.title || item.filename);
-        const cover = meta.cover || this.formatEztvScreenshot(item);
-
-        return {
-          title: item.title || item.filename,
-          url: item.imdb_id && item.imdb_id !== "0" ? item.imdb_id : item.id.toString(),
-          cover: cover,
-          update: `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`,
-        };
-      })
-    );
+    return filtered.map((item) => {
+      const sizeStr = this.formatSize(item.size_bytes);
+      return {
+        title: item.title || item.filename,
+        url: item.imdb_id && item.imdb_id !== "0" ? `imdb:${item.imdb_id}` : `id:${item.id}`,
+        cover: this.formatEztvScreenshot(item),
+        update: `S${item.season}E${item.episode} | S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}`,
+      };
+    });
   }
 
   async detail(url) {
     let torrents = [];
-    let isImdb = /^\d+$/.test(url);
+    let imdbId = "";
+    let eztvId = "";
 
-    if (isImdb) {
-      const res = await this.request(`/api/get-torrents?imdb_id=${url}`);
+    if (url.startsWith("imdb:")) {
+      imdbId = url.replace("imdb:", "");
+    } else if (url.startsWith("id:")) {
+      eztvId = url.replace("id:", "");
+    } else if (/^\d+$/.test(url)) {
+      if (url.length >= 6) {
+        imdbId = url;
+      } else {
+        eztvId = url;
+      }
+    }
+
+    if (imdbId) {
+      const res = await this.request(`/api/get-torrents?imdb_id=${imdbId}&limit=100`);
       if (res && res.torrents) {
         torrents = res.torrents;
       }
@@ -191,7 +190,11 @@ export default class extends Extension {
     if (torrents.length === 0) {
       const res = await this.request(`/api/get-torrents?limit=100&page=1`);
       if (res && res.torrents) {
-        torrents = res.torrents.filter((item) => item.id.toString() === url);
+        if (eztvId) {
+          torrents = res.torrents.filter((item) => item.id.toString() === eztvId);
+        } else {
+          torrents = res.torrents.filter((item) => item.id.toString() === url || item.imdb_id === url);
+        }
       }
     }
 
@@ -208,9 +211,10 @@ export default class extends Extension {
     const rawTitle = firstItem.title || firstItem.filename;
     const cleanTitle = this.cleanShowTitle(rawTitle);
 
-    const meta = await this.getMetadata(firstItem.imdb_id, rawTitle);
+    const actualImdb = imdbId || (firstItem.imdb_id && firstItem.imdb_id !== "0" ? firstItem.imdb_id : "");
+    const meta = await this.getMetadata(actualImdb, rawTitle);
     const cover = meta.cover || this.formatEztvScreenshot(firstItem);
-    const desc = meta.desc || (firstItem.imdb_id && firstItem.imdb_id !== "0" ? `IMDB ID: ${firstItem.imdb_id}` : "");
+    const desc = meta.desc || (actualImdb ? `IMDB ID: ${actualImdb}` : "");
 
     if (torrents.length === 1) {
       const item = torrents[0];
