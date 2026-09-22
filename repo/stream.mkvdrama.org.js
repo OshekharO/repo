@@ -135,6 +135,34 @@ export default class extends Extension {
 
     const fullUrl = url.startsWith("http") ? url : "https://kisskh.top" + url;
 
+    // Check for episode links in ul.episodios or #episodes or links containing /episodes/
+    const episodeList = [];
+    const episodeElems = await this.querySelectorAll(res, "#episodes li, ul.episodios li, .num-epi a");
+    if (episodeElems && episodeElems.length > 0) {
+      for (const ep of episodeElems) {
+        const html = await ep.content;
+        const epUrl = await this.getAttributeText(html, "a", "href");
+        let epTitle = "Episode";
+        const titleElem = await this.querySelector(html, ".title, .numerando, a");
+        if (titleElem) {
+          epTitle = await titleElem.text;
+        }
+        if (epUrl) {
+          episodeList.push({
+            name: epTitle.trim(),
+            url: epUrl.startsWith("http") ? epUrl : "https://kisskh.top" + epUrl,
+          });
+        }
+      }
+    }
+
+    if (episodeList.length === 0) {
+      episodeList.push({
+        name: "Full Video",
+        url: fullUrl,
+      });
+    }
+
     return {
       title: title.trim(),
       cover,
@@ -142,12 +170,7 @@ export default class extends Extension {
       episodes: [
         {
           title: "Directory",
-          urls: [
-            {
-              name: "Full Video",
-              url: fullUrl,
-            },
-          ],
+          urls: episodeList,
         },
       ],
     };
@@ -155,6 +178,26 @@ export default class extends Extension {
 
   async watch(url) {
     const pageUrl = url.startsWith("http") ? url : "https://kisskh.top" + url;
+
+    // Check if url is already a direct video or jwplayer source
+    if (pageUrl.includes("jwplayer/?source=") || pageUrl.includes("source=")) {
+      const sourceMatch = pageUrl.match(/source=([^&"'\s>]+)/i);
+      if (sourceMatch) {
+        try {
+          const directUrl = decodeURIComponent(sourceMatch[1]);
+          return {
+            type: directUrl.includes(".m3u8") ? "hls" : "mp4",
+            url: directUrl,
+            headers: {
+              Referer: "https://kisskh.top/",
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            },
+          };
+        } catch (e) {}
+      }
+    }
+
     const res = await this.request("", {
       headers: {
         "Miru-Url": pageUrl,
