@@ -107,16 +107,22 @@ export default class extends Extension {
   }
 
   async watch(url) {
+    const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
     if (url.startsWith("http://") || url.startsWith("https://")) {
       return {
         type: url.includes(".m3u8") ? "hls" : "mp4",
         url: url,
+        headers: {
+          "User-Agent": userAgent,
+        },
       };
     }
 
     const res = await this.request("", {
       headers: {
         "Miru-Url": `https://streamrip.fun/api/download/movie/${url}`,
+        "User-Agent": userAgent,
       },
     });
 
@@ -126,6 +132,9 @@ export default class extends Extension {
     return {
       type: downloadUrl.includes(".m3u8") ? "hls" : "mp4",
       url: downloadUrl,
+      headers: {
+        "User-Agent": userAgent,
+      },
     };
   }
 }
