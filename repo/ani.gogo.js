@@ -50,10 +50,7 @@ export default class extends Extension {
             anilistId
             titleEnglish
             titleRomaji
-            coverImage {
-              extraLarge
-              large
-            }
+            coverImage
           }
         }
       }
@@ -74,8 +71,9 @@ export default class extends Extension {
 
     const items = res?.data?.catalogAnime?.items || [];
     return items.map((item) => {
-      const title = item.titleEnglish || item.titleRomaji || "N/A";
-      const cover = item.coverImage?.extraLarge || item.coverImage?.large || "";
+      const title = item.titleEnglish || item.titleRomaji || item.id || "N/A";
+      const coverObj = typeof item.coverImage === "string" ? JSON.parse(item.coverImage || "{}") : (item.coverImage || {});
+      const cover = coverObj.extraLarge || coverObj.large || coverObj.medium || "";
       return {
         title,
         url: item.id.toString(),
