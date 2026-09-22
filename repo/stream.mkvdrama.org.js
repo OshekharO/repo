@@ -208,7 +208,7 @@ export default class extends Extension {
     const pageUrl = url.startsWith("http") ? url : "https://kisskh.top" + url;
 
     // Check if url is already a direct video or jwplayer source
-    if (pageUrl.includes("jwplayer/?source=") || pageUrl.includes("source=")) {
+    if (pageUrl.includes("source=")) {
       const sourceMatch = pageUrl.match(/source=([^&"'\s>]+)/i);
       if (sourceMatch) {
         try {
@@ -239,7 +239,7 @@ export default class extends Extension {
     for (const match of iframeMatches) {
       const iframeSrc = match[1];
 
-      // Check jwplayer source param in iframe
+      // Check source param in iframe
       const sourceMatch = iframeSrc.match(/source=([^&"'\s>]+)/i);
       if (sourceMatch) {
         try {
@@ -286,15 +286,58 @@ export default class extends Extension {
       }
     }
 
-    // 2. Direct regex match fallback on page source for m3u8 or mp4
+    // 2. Try doo_player_ajax API if directUrl not found from static iframe
+    if (!directUrl) {
+      const postIdMatch = res.match(/data-id=["'](\d+)["']/i) ||
+                          res.match(/postid-(\d+)/i) ||
+                          res.match(/data-post-id=["'](\d+)["']/i);
+      if (postIdMatch) {
+        const postId = postIdMatch[1];
+        const epNumberMatch = pageUrl.match(/\/(\d+)\/?$/);
+        const numeVal = epNumberMatch ? epNumberMatch[1] : "1";
+
+        for (const ptype of ["movie", "tv"]) {
+          try {
+            const formData = new URLSearchParams();
+            formData.append("action", "doo_player_ajax");
+            formData.append("post", postId);
+            formData.append("nume", numeVal);
+            formData.append("type", ptype);
+
+            const ajaxRes = await this.request("/wp-admin/admin-ajax.php", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Requested-With": "XMLHttpRequest",
+              },
+              data: formData.toString(),
+            });
+
+            const parsed = typeof ajaxRes === "string" ? JSON.parse(ajaxRes) : ajaxRes;
+            if (parsed && parsed.embed_url) {
+              const sourceMatch = parsed.embed_url.match(/source=([^&"'\s>]+)/i);
+              if (sourceMatch) {
+                directUrl = decodeURIComponent(sourceMatch[1]);
+                break;
+              } else if (parsed.embed_url.startsWith("http")) {
+                directUrl = parsed.embed_url;
+                break;
+              }
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    // 3. Direct regex match fallback on page source for m3u8 or mp4
     if (!directUrl) {
       const directMatch = res.match(/https?:\/\/[^\s'"\>]+\.(?:m3u8|mp4)[^\s'"\>]*/i);
-      if (directMatch) {
+      if (directMatch && !directMatch[0].endsWith(".js") && !directMatch[0].endsWith(".css")) {
         directUrl = directMatch[0];
       }
     }
 
-    // 3. Absolute fallback to pageUrl so Miru doesn't get an empty URL string
+    // 4. Absolute fallback to pageUrl
     if (!directUrl) {
       directUrl = pageUrl;
     }
