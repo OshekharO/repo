@@ -255,8 +255,8 @@ export default class extends Extension {
         let c2 = ((b2 & 15) << 4) | (b3 >> 2);
         let c3 = ((b3 & 3) << 6) | b4;
         bytes.push(c1);
-        if (b3 !== -1) bytes.push(c2);
-        if (b4 !== -1) bytes.push(c3);
+        if (b3 !== -1 && b3 !== 64) bytes.push(c2);
+        if (b4 !== -1 && b4 !== 64) bytes.push(c3);
       }
       return new Uint8Array(bytes);
     };
@@ -326,7 +326,7 @@ export default class extends Extension {
       if (i % Nk === 0) {
         temp = (temp << 8) | (temp >>> 24);
         temp = (S[(temp >>> 24) & 0xff] << 24) | (S[(temp >>> 16) & 0xff] << 16) | (S[(temp >>> 8) & 0xff] << 8) | S[temp & 0xff];
-        temp ^= Rcon[i / Nk] << 24;
+        temp ^= Rcon[Math.floor(i / Nk)] << 24;
       } else if (Nk > 6 && i % Nk === 4) {
         temp = (S[(temp >>> 24) & 0xff] << 24) | (S[(temp >>> 16) & 0xff] << 16) | (S[(temp >>> 8) & 0xff] << 8) | S[temp & 0xff];
       }
