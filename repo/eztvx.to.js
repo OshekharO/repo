@@ -27,6 +27,13 @@ export default class extends Extension {
     return `${b} B`;
   }
 
+  getTorrentUrl(item) {
+    if (item.hash) {
+      return `https://itorrents.net/torrent/${item.hash.toUpperCase()}.torrent`;
+    }
+    return item.magnet_url || "";
+  }
+
   async latest(page) {
     const res = await this.request(`/api/get-torrents?limit=30&page=${page}`);
     if (!res || !res.torrents) return [];
@@ -147,7 +154,7 @@ export default class extends Extension {
             urls: [
               {
                 name: `${item.title || item.filename} [S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}]`,
-                url: item.magnet_url,
+                url: this.getTorrentUrl(item),
               },
             ],
           },
@@ -158,13 +165,14 @@ export default class extends Extension {
     const seasonMap = {};
     torrents.forEach((item) => {
       const seasonNum = parseInt(item.season) || 0;
-      const seasonKey = seasonNum > 0 ? `Season ${seasonNum}` : "Torrents";      if (!seasonMap[seasonKey]) {
+      const seasonKey = seasonNum > 0 ? `Season ${seasonNum}` : "Torrents";
+      if (!seasonMap[seasonKey]) {
         seasonMap[seasonKey] = [];
       }
       const sizeStr = this.formatSize(item.size_bytes);
       seasonMap[seasonKey].push({
         name: `${item.title || item.filename} [S:${item.seeds} P:${item.peers}${sizeStr ? " | " + sizeStr : ""}]`,
-        url: item.magnet_url,
+        url: this.getTorrentUrl(item),
       });
     });
 
