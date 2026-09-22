@@ -1,20 +1,20 @@
 // ==MiruExtension==
 // @name         Piped
-// @version      v0.0.3
+// @version      v0.0.4
 // @author       bethro
 // @lang         all
 // @license      MIT
 // @icon         https://piped.video/img/icons/android-chrome-192x192.png
 // @package      piped.video
 // @type         bangumi
-// @webSite      https://piped.private.coffee
+// @webSite      https://invidious.tiekoetter.com
 // ==/MiruExtension==
 
 export default class extends Extension {
     async req(url) {
         let apiUrl = (await this.getSetting("piped") || "").trim().replace(/\/+$/, "");
-        if (apiUrl === "https://piped.private.coffee") {
-            apiUrl = "https://api.piped.private.coffee";
+        if (!apiUrl.includes("/api/v1")) {
+            apiUrl = `${apiUrl}/api/v1`;
         }
         try {
             return await this.request(url, {
@@ -29,11 +29,11 @@ export default class extends Extension {
 
     async load() {
         this.registerSetting({
-            title: "PIPED INSTANCE",
+            title: "INVIDIOUS / PIPED INSTANCE",
             key: "piped",
             type: "input",
-            description: "url piped instance api",
-            defaultValue: "https://api.piped.private.coffee",
+            description: "url invidious/piped instance",
+            defaultValue: "https://invidious.tiekoetter.com",
         });
 
         this.registerSetting({
@@ -51,93 +51,72 @@ export default class extends Extension {
             return [];
         }
         return res.map((item) => ({
-            url: item.url,
-            title: item.title,
-            cover: item.thumbnail,
+            url: item.videoId || item.url || "",
+            title: item.title || "",
+            cover: item.videoThumbnails?.[0]?.url || item.thumbnail || "",
         }));
     }
 
     async search(kw, page) {
-        const res = await this.req(`/search?q=${kw}&filter=all`);
-        const items = res && Array.isArray(res.items) ? res.items : [];
-        let streams = items.filter((item) => item.type == "stream");
+        const res = await this.req(`/search?q=${kw}`);
+        const items = Array.isArray(res) ? res : (res && Array.isArray(res.items) ? res.items : []);
 
-        return streams.map((item) => {
-            return {
-                url: item.url,
-                title: item.title || item.name,
-                cover: item.thumbnail,
-            };
-        });
+        return items.map((item) => ({
+            url: item.videoId || item.url || "",
+            title: item.title || item.name || "",
+            cover: item.videoThumbnails?.[0]?.url || item.thumbnail || "",
+        }));
     }
 
     async detail(url) {
-        const videoID = url.split("v=").pop();
-        const res = await this.req(`/streams/${videoID}`);
+        const videoID = url.split("v=").pop().replace(/^\//, "");
+        const res = await this.req(`/videos/${videoID}`);
 
         if (res && res.error) {
             return {
                 title: `Video (${videoID})`,
                 cover: "",
-                desc: res.message || "Failed to fetch video details from Piped API.",
+                desc: res.message || "Failed to fetch video details from Invidious API.",
                 episodes: [],
             };
         }
 
-        let preferredQuality = await this.getSetting("quality");
-        const sortEpisodes = (episodes) =>
-            episodes.sort((a, b) => {
-                const qualityA = (a.title || "").toLowerCase();
-                const qualityB = (b.title || "").toLowerCase();
+        const formatStreams = Array.isArray(res.formatStreams) ? res.formatStreams : [];
+        const adaptiveFormats = Array.isArray(res.adaptiveFormats) ? res.adaptiveFormats : [];
 
-                if (qualityA === preferredQuality) return -1;
-                if (qualityB === preferredQuality) return 1;
-                return qualityA.localeCompare(qualityB);
-            });
+        let episodes = [];
 
-        const videoStreams = res && Array.isArray(res.videoStreams) ? res.videoStreams : [];
-        const audioStreams = res && Array.isArray(res.audioStreams) ? res.audioStreams : [];
-
-        let episodes = sortEpisodes(
-            videoStreams.map((item, index) => {
-                const audioStream = audioStreams[index] || audioStreams[0];
-                const combinedURL = `${item.url || ''}|${audioStream ? audioStream.url : ''}|${videoID}`;
-                return {
-                    title: item.quality || "Default",
-                    urls: [{ name: res.title || "Play", url: combinedURL }],
-                };
-            })
-        );
+        if (formatStreams.length > 0) {
+            episodes = formatStreams.map((item) => ({
+                title: item.qualityLabel || item.quality || "Default",
+                urls: [{ name: res.title || "Play", url: item.url }],
+            }));
+        } else if (res.hlsUrl) {
+            episodes = [{
+                title: "HLS",
+                urls: [{ name: res.title || "Play", url: res.hlsUrl }],
+            }];
+        } else if (adaptiveFormats.length > 0) {
+            episodes = adaptiveFormats.filter(f => f.url).map((item) => ({
+                title: item.qualityLabel || item.quality || "Adaptive",
+                urls: [{ name: res.title || "Play", url: item.url }],
+            }));
+        }
 
         return {
             title: res.title || "",
-            cover: res.thumbnailUrl || "",
+            cover: res.videoThumbnails?.[0]?.url || res.thumbnailUrl || "",
             desc: res.description || "",
             episodes,
         };
     }
 
     async watch(url) {
-        const [videoUrl, audioUrl, videoID] = url.split("|");
-        let subtitles = [];
-
-        if (videoID) {
-            const sub = await this.req(`/streams/${videoID}`);
-            const subtitlesList = sub && Array.isArray(sub.subtitles) ? sub.subtitles : [];
-            subtitles = subtitlesList.map((item) => ({
-                title: item.name,
-                url: item.url,
-                language: item.code,
-            }));
-        }
-
-        const type = videoUrl.includes(".m3u8") ? "hls" : "mp4";
+        const type = url.includes(".m3u8") ? "hls" : "mp4";
 
         return {
             type,
-            url: videoUrl,
-            audioTrack: audioUrl,
-            subtitles: subtitles,
+            url: url,
         };
     }
 }

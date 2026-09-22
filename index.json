@@ -1208,8 +1208,8 @@
   "package": "piped.video",
   "type": "bangumi",
   "url": "piped.video.js",
-  "version": "v0.0.3",
-  "webSite": "https://piped.private.coffee"
+  "version": "v0.0.4",
+  "webSite": "https://invidious.tiekoetter.com"
  },
  {
   "author": "bachig26",
