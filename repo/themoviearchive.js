@@ -112,25 +112,36 @@ export default class extends Extension {
     if (url.startsWith("http://") || url.startsWith("https://")) {
       let finalUrl = url;
 
-      if (url.includes("googleusercontent.com")) {
-        finalUrl = url;
-      } else if (!url.includes(".m3u8") && !url.includes(".mp4") && !url.includes(".mkv")) {
-        try {
-          const res = await this.request("", {
-            headers: {
-              "Miru-Url": url,
-              "User-Agent": userAgent,
-            },
-          });
+      if (!url.includes("googleusercontent.com") && !url.endsWith(".m3u8") && !url.endsWith(".mp4") && !url.endsWith(".mkv")) {
+        let currentUrl = url;
+        for (let i = 0; i < 3; i++) {
+          try {
+            const res = await this.request("", {
+              headers: {
+                "Miru-Url": currentUrl,
+                "User-Agent": userAgent,
+              },
+            });
 
-          if (typeof res === "string") {
-            const match = res.match(/https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4|mkv)(?:\?[^\s"'<>]*)?/i) || res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud|googleusercontent\.com)[^\s"'<>]*/i);
-            if (match) {
-              finalUrl = match[0];
+            if (typeof res === "string") {
+              const match = res.match(/https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4|mkv)(?:\?[^\s"'<>]*)?/i) ||
+                            res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud|googleusercontent\.com|gdflix|fastdl)[^\s"'<>]*/i);
+              if (match && match[0] !== currentUrl) {
+                currentUrl = match[0];
+                finalUrl = currentUrl;
+                if (finalUrl.includes(".m3u8") || finalUrl.includes(".mp4") || finalUrl.includes(".mkv") || finalUrl.includes("googleusercontent.com") || finalUrl.includes("busycdn")) {
+                  break;
+                }
+              } else {
+                break;
+              }
+            } else {
+              break;
             }
+          } catch (e) {
+            console.log(e);
+            break;
           }
-        } catch (e) {
-          console.log(e);
         }
       }
 
