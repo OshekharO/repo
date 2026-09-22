@@ -258,13 +258,13 @@ export default class extends Extension {
         if (b3 !== -1 && b3 !== 64) bytes.push(c2);
         if (b4 !== -1 && b4 !== 64) bytes.push(c3);
       }
-      return new Uint8Array(bytes);
+      return bytes;
     };
 
     const strToBytes = (str) => {
-      let bytes = new Uint8Array(str.length);
+      let bytes = [];
       for (let i = 0; i < str.length; i++) {
-        bytes[i] = str.charCodeAt(i);
+        bytes.push(str.charCodeAt(i));
       }
       return bytes;
     };
@@ -276,15 +276,15 @@ export default class extends Extension {
     if (typeof crypto !== "undefined" && crypto.subtle) {
       const key = await crypto.subtle.importKey(
         "raw",
-        keyBytes,
+        new Uint8Array(keyBytes),
         { name: "AES-CBC" },
         false,
         ["decrypt"]
       );
       const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-CBC", iv: ivBytes },
+        { name: "AES-CBC", iv: new Uint8Array(ivBytes) },
         key,
-        cipherBytes
+        new Uint8Array(cipherBytes)
       );
       const decBytes = new Uint8Array(decrypted);
       return new TextDecoder("utf-8").decode(decBytes);
@@ -309,7 +309,7 @@ export default class extends Extension {
       0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
     ];
 
-    const Si = new Uint8Array(256);
+    const Si = [];
     for (let i = 0; i < 256; i++) Si[S[i]] = i;
 
     const Rcon = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36];
@@ -317,7 +317,7 @@ export default class extends Extension {
     const Nk = keyBytes.length / 4;
     const Nr = Nk + 6;
 
-    const w = new Uint32Array(4 * (Nr + 1));
+    const w = [];
     for (let i = 0; i < Nk; i++) {
       w[i] = (keyBytes[4 * i] << 24) | (keyBytes[4 * i + 1] << 16) | (keyBytes[4 * i + 2] << 8) | keyBytes[4 * i + 3];
     }
@@ -356,7 +356,7 @@ export default class extends Extension {
     };
 
     const decryptBlock = (block, out) => {
-      let state = new Uint8Array(16);
+      let state = [];
       for (let i = 0; i < 16; i++) state[i] = block[i];
 
       for (let i = 0; i < 16; i++) {
@@ -364,7 +364,7 @@ export default class extends Extension {
       }
 
       for (let round = Nr - 1; round >= 0; round--) {
-        let tmp = new Uint8Array(16);
+        let tmp = [];
         tmp[0] = Si[state[0]]; tmp[4] = Si[state[4]]; tmp[8] = Si[state[8]]; tmp[12] = Si[state[12]];
         tmp[1] = Si[state[13]]; tmp[5] = Si[state[1]]; tmp[9] = Si[state[5]]; tmp[13] = Si[state[9]];
         tmp[2] = Si[state[10]]; tmp[6] = Si[state[14]]; tmp[10] = Si[state[2]]; tmp[14] = Si[state[6]];
@@ -383,12 +383,13 @@ export default class extends Extension {
       for (let i = 0; i < 16; i++) out[i] = state[i];
     };
 
-    let decrypted = new Uint8Array(cipherBytes.length);
+    let decrypted = [];
     let prevBlock = ivBytes;
-    let blockOut = new Uint8Array(16);
+    let blockOut = [];
 
     for (let i = 0; i < cipherBytes.length; i += 16) {
-      let block = cipherBytes.subarray(i, i + 16);
+      let block = [];
+      for (let k = 0; k < 16; k++) block[k] = cipherBytes[i + k];
       decryptBlock(block, blockOut);
       for (let j = 0; j < 16; j++) {
         decrypted[i + j] = blockOut[j] ^ prevBlock[j];
@@ -397,7 +398,7 @@ export default class extends Extension {
     }
 
     let padLen = decrypted[decrypted.length - 1];
-    let plainBytes = decrypted.subarray(0, decrypted.length - padLen);
+    let plainBytes = decrypted.slice(0, decrypted.length - padLen);
     let str = "";
     for (let i = 0; i < plainBytes.length; i++) {
       str += String.fromCharCode(plainBytes[i]);
