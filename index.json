@@ -1208,8 +1208,8 @@
   "package": "piped.video",
   "type": "bangumi",
   "url": "piped.video.js",
-  "version": "v0.0.1",
-  "webSite": "https://pipedapi.ducks.party"
+  "version": "v0.0.2",
+  "webSite": "https://piped.private.coffee"
  },
  {
   "author": "bachig26",

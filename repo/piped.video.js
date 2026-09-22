@@ -1,20 +1,24 @@
 // ==MiruExtension==
 // @name         Piped
-// @version      v0.0.1
+// @version      v0.0.2
 // @author       bethro
 // @lang         all
 // @license      MIT
 // @icon         https://piped.video/img/icons/android-chrome-192x192.png
 // @package      piped.video
 // @type         bangumi
-// @webSite      https://pipedapi.ducks.party
+// @webSite      https://piped.private.coffee
 // ==/MiruExtension==
 
 export default class extends Extension {
     async req(url) {
+        let apiUrl = (await this.getSetting("piped") || "").trim().replace(/\/+$/, "");
+        if (apiUrl === "https://piped.private.coffee") {
+            apiUrl = "https://api.piped.private.coffee";
+        }
         return this.request(url, {
             headers: {
-                "Miru-Url": await this.getSetting("piped"),
+                "Miru-Url": apiUrl,
             },
         });
     }
@@ -25,7 +29,7 @@ export default class extends Extension {
             key: "piped",
             type: "input",
             description: "url piped instance api",
-            defaultValue: "https://pipedapi.ducks.party",
+            defaultValue: "https://api.piped.private.coffee",
         });
 
         this.registerSetting({
@@ -39,6 +43,9 @@ export default class extends Extension {
 
     async latest(page) {
         const res = await this.req(`/trending?region=US`);
+        if (!Array.isArray(res)) {
+            return [];
+        }
         return res.map((item) => ({
             url: item.url,
             title: item.title,
@@ -48,7 +55,8 @@ export default class extends Extension {
 
     async search(kw, page) {
         const res = await this.req(`/search?q=${kw}&filter=all`);
-        let streams = res.items.filter((item) => item.type == "stream");
+        const items = res && Array.isArray(res.items) ? res.items : [];
+        let streams = items.filter((item) => item.type == "stream");
 
         return streams.map((item) => {
             return {
@@ -58,6 +66,7 @@ export default class extends Extension {
             };
         });
     }
+
     async detail(url) {
         const videoID = url.split("v=").pop();
         const res = await this.req(`/streams/${videoID}`);
@@ -65,30 +74,32 @@ export default class extends Extension {
         let preferredQuality = await this.getSetting("quality");
         const sortEpisodes = (episodes) =>
             episodes.sort((a, b) => {
-                const qualityA = a.title.toLowerCase();
-                const qualityB = b.title.toLowerCase();
+                const qualityA = (a.title || "").toLowerCase();
+                const qualityB = (b.title || "").toLowerCase();
 
                 if (qualityA === preferredQuality) return -1;
                 if (qualityB === preferredQuality) return 1;
                 return qualityA.localeCompare(qualityB);
             });
 
+        const videoStreams = res && Array.isArray(res.videoStreams) ? res.videoStreams : [];
+        const audioStreams = res && Array.isArray(res.audioStreams) ? res.audioStreams : [];
+
         let episodes = sortEpisodes(
-            res.videoStreams.map((item, index) => {
-                const audioStream = res.audioStreams[index] || res.audioStreams[0];
-                const combinedURL = `${item.url}|${audioStream ? audioStream.url : ''}|${videoID}`;
+            videoStreams.map((item, index) => {
+                const audioStream = audioStreams[index] || audioStreams[0];
+                const combinedURL = `${item.url || ''}|${audioStream ? audioStream.url : ''}|${videoID}`;
                 return {
-                    title: item.quality,
-                    urls: [{ name: res.title, url: combinedURL }],
+                    title: item.quality || "Default",
+                    urls: [{ name: res.title || "Play", url: combinedURL }],
                 };
             })
         );
 
-
         return {
-            title: res.title,
-            cover: res.thumbnailUrl,
-            desc: res.description,
+            title: res.title || "",
+            cover: res.thumbnailUrl || "",
+            desc: res.description || "",
             episodes,
         };
     }
@@ -97,7 +108,8 @@ export default class extends Extension {
         const [videoUrl, audioUrl, videoID] = url.split("|");
         const sub = await this.req(`/streams/${videoID}`);
 
-        const subtitles = (sub.subtitles || []).map((item) => ({
+        const subtitlesList = sub && Array.isArray(sub.subtitles) ? sub.subtitles : [];
+        const subtitles = subtitlesList.map((item) => ({
             title: item.name,
             url: item.url,
             language: item.code,
