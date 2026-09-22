@@ -110,9 +110,31 @@ export default class extends Extension {
     const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
     if (url.startsWith("http://") || url.startsWith("https://")) {
+      let finalUrl = url;
+
+      if (!url.includes(".m3u8") && !url.includes(".mp4") && !url.includes(".mkv")) {
+        try {
+          const res = await this.request("", {
+            headers: {
+              "Miru-Url": url,
+              "User-Agent": userAgent,
+            },
+          });
+
+          if (typeof res === "string") {
+            const match = res.match(/https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4|mkv)(?:\?[^\s"'<>]*)?/i) || res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud)[^\s"'<>]*/i);
+            if (match) {
+              finalUrl = match[0];
+            }
+          }
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
       return {
-        type: url.includes(".m3u8") ? "hls" : "mp4",
-        url: url,
+        type: finalUrl.includes(".m3u8") ? "hls" : "mp4",
+        url: finalUrl,
         headers: {
           "User-Agent": userAgent,
         },
