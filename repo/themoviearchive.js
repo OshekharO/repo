@@ -112,7 +112,9 @@ export default class extends Extension {
     if (url.startsWith("http://") || url.startsWith("https://")) {
       let finalUrl = url;
 
-      if (!url.includes(".m3u8") && !url.includes(".mp4") && !url.includes(".mkv")) {
+      if (url.includes("googleusercontent.com")) {
+        finalUrl = url;
+      } else if (!url.includes(".m3u8") && !url.includes(".mp4") && !url.includes(".mkv")) {
         try {
           const res = await this.request("", {
             headers: {
@@ -122,7 +124,7 @@ export default class extends Extension {
           });
 
           if (typeof res === "string") {
-            const match = res.match(/https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4|mkv)(?:\?[^\s"'<>]*)?/i) || res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud)[^\s"'<>]*/i);
+            const match = res.match(/https?:\/\/[^\s"'<>]+\.(?:m3u8|mp4|mkv)(?:\?[^\s"'<>]*)?/i) || res.match(/https?:\/\/[^\s"'<>]*(?:busycdn|workers\.dev|hubcloud|googleusercontent\.com)[^\s"'<>]*/i);
             if (match) {
               finalUrl = match[0];
             }
