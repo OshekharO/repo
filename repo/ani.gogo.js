@@ -90,20 +90,16 @@ export default class extends Extension {
     let cover = "";
     let desc = "";
 
-    // Query GraphQL for anime info
+    // Query GraphQL for anime info by ID
     try {
       const query = `
-        query GetAnime($query: String) {
-          catalogAnime(filter: { query: $query }, limit: 1) {
-            items {
-              id
-              titleEnglish
-              titleRomaji
-              coverImage {
-                extraLarge
-                large
-              }
-            }
+        query GetAnime($id: String!) {
+          anime(id: $id) {
+            id
+            titleEnglish
+            titleRomaji
+            coverImage
+            description
           }
         }
       `;
@@ -114,16 +110,18 @@ export default class extends Extension {
         },
         data: {
           query,
-          variables: { query: animeId },
+          variables: { id: animeId },
         },
       });
-      const item = infoRes?.data?.catalogAnime?.items?.[0];
+      const item = infoRes?.data?.anime;
       if (item) {
         title = item.titleEnglish || item.titleRomaji || animeId;
-        cover = item.coverImage?.extraLarge || item.coverImage?.large || "";
+        const coverObj = typeof item.coverImage === "string" ? JSON.parse(item.coverImage || "{}") : (item.coverImage || {});
+        cover = coverObj.extraLarge || coverObj.large || coverObj.medium || "";
+        desc = item.description || "";
       }
     } catch (e) {
-      // Fallback title/cover if GraphQL query fails
+      // Fallback
     }
 
     // Fetch episode list from Animex REST API
