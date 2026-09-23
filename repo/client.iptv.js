@@ -15,17 +15,14 @@
 
 export default class extends Extension {
 	#opts = {
-		url: 'https://live.fanmingming.com/tv/m3u/ipv6.m3u',
-		exturl: "https://cdn.jsdelivr.net/gh/vvsolo/miru-extension-MyIPTV-sources/sources.json",
+		url: 'https://cdn.jsdelivr.net/gh/vbskycn/iptv@master/tv/iptv4.m3u',
+		exturl: "",
 		lists: {
 			"none": "",
-			"🇨🇳 fanmingming-IPV6": "https://live.fanmingming.com/tv/m3u/ipv6.m3u",
 			"🇨🇳 vbskycn-IPV4": "https://cdn.jsdelivr.net/gh/vbskycn/iptv@master/tv/iptv4.m3u",
+			"🇨🇳 fanmingming-IPV6": "https://live.fanmingming.com/tv/m3u/ipv6.m3u",
 			"🌐 iptv-org": "https://iptv-org.github.io/iptv/index.m3u",
-			"🇨🇳 MyIPTV-IPV6": "https://cdn.jsdelivr.net/gh/vvsolo/miru-extension-MyIPTV-sources/ipv6.m3u",
-			"🇨🇳 MyIPTV-IPV4": "https://cdn.jsdelivr.net/gh/vvsolo/miru-extension-MyIPTV-sources/ipv4.m3u",
-			"🇨🇳 MyIPTV-VOD": "https://cdn.jsdelivr.net/gh/vvsolo/miru-extension-MyIPTV-sources/ipv4.vod.m3u",
-			"🇨🇳 MyIPTV-RADIO": "https://cdn.jsdelivr.net/gh/vvsolo/miru-extension-MyIPTV-sources/radio.m3u",
+			"🌏 Free-TV": "https://cdn.jsdelivr.net/gh/Free-TV/IPTV/playlist.m3u8",
 		}
 	}
 	#group = {
@@ -43,6 +40,9 @@ export default class extends Extension {
 	}
 
 	async cacheJSON() {
+		if (!this.#opts.exturl) {
+			return null;
+		}
 		if (this.#cache.exturl && await this.checkExpire()) {
 			return this.#cache.exturl;
 		}
