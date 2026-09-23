@@ -138,9 +138,10 @@ export default class extends Extension {
 		if (page > 1) {
 			return [];
 		}
-		const builtin = await this.getSetting('builtin');
+		const builtinRaw = await this.getSetting('builtin');
+		const builtinUrl = this.#opts.lists[builtinRaw] || builtinRaw;
 		const source = await this.getSetting('source');
-		const baseUrl = (builtin && builtin !== 'none') ? builtin : (source || '');
+		const baseUrl = (builtinUrl && builtinUrl !== 'none') ? builtinUrl : (source || '');
 		if (!baseUrl) {
 			throw 'No valid address set!';
 		}
