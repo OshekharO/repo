@@ -34,7 +34,7 @@ Miru extensions repository | [Miru App Download](https://github.com/miru-project
 | DramaCool | dramacool.pa | v0.0.6 | OshekharO | en | bangumi | [Source Code](https://github.com/miru-project/repo/blob/main/repo/dramacool.pa.js) |
 | EZTV | eztvx.to | v0.0.1 | OshekharO | en | bangumi | [Source Code](https://github.com/miru-project/repo/blob/main/repo/eztvx.to.js) |
 | 非凡资源 | ffzy.tv | v0.0.2 | hualiong | zh-cn | bangumi | [Source Code](https://github.com/miru-project/repo/blob/main/repo/ffzy.tv.js) |
-| FilmyWape | filmywape.com | v0.0.2 | jules | hi | bangumi | [Source Code](https://github.com/miru-project/repo/blob/main/repo/filmywape.com.js) |
+| FilmyWape | filmywape.com | v0.0.3 | jules | hi | bangumi | [Source Code](https://github.com/miru-project/repo/blob/main/repo/filmywape.com.js) |
 | FlameComics | flamecomics.com | v0.0.2 | bethro | en | manga | [Source Code](https://github.com/miru-project/repo/blob/main/repo/flamecomics.com.js) |
 | Funtoons | funtoons.online | v0.0.1 | funtoons | th | manga | [Source Code](https://github.com/miru-project/repo/blob/main/repo/funtoons.online.js) |
 | GakiArchives | gakiarchives.com | v0.0.1 | bachig26 | en | bangumi | [Source Code](https://github.com/miru-project/repo/blob/main/repo/gakiarchives.com.js) |

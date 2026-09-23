@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         FilmyWape
-// @version      v0.0.2
+// @version      v0.0.3
 // @author       jules
 // @lang         hi
 // @license      MIT
@@ -203,32 +203,34 @@ export default class extends Extension {
           },
         });
 
-        const dlButtons = await this.querySelectorAll(res, "a.dl-button");
-        let targetHref = "";
+        if (res && !res.includes("just a moment") && !res.includes("challenge-platform")) {
+          const dlButtons = await this.querySelectorAll(res, "a.dl-button");
+          let targetHref = "";
 
-        for (const btn of dlButtons) {
-          const btnHtml = btn.content;
-          const href = await this.getAttributeText(btnHtml, "a", "href");
-          const aElem = await this.querySelector(btnHtml, "a");
-          const txt = aElem ? await aElem.text : "";
+          for (const btn of dlButtons) {
+            const btnHtml = btn.content;
+            const href = await this.getAttributeText(btnHtml, "a", "href");
+            const aElem = await this.querySelector(btnHtml, "a");
+            const txt = aElem ? await aElem.text : "";
 
-          if (href && href.includes("/l.php?file=")) {
-            if (!targetHref || txt.includes("Cloud Direct") || txt.includes("Direct Download")) {
-              targetHref = href;
+            if (href && href.includes("/l.php?file=")) {
+              if (!targetHref || txt.includes("Cloud Direct") || txt.includes("Direct Download")) {
+                targetHref = href;
+              }
             }
           }
-        }
 
-        if (!targetHref) {
-          const match = res.match(/href=["'](\/l\.php\?file=[^"']+)["']/i);
-          if (match) {
-            targetHref = match[1];
+          if (!targetHref) {
+            const match = res.match(/href=["'](\/l\.php\?file=[^"']+)["']/i);
+            if (match) {
+              targetHref = match[1];
+            }
           }
-        }
 
-        if (targetHref) {
-          targetHref = targetHref.replace(/&amp;/g, "&");
-          playUrl = targetHref.startsWith("http") ? targetHref : `${baseUrl}${targetHref.startsWith("/") ? "" : "/"}${targetHref}`;
+          if (targetHref) {
+            targetHref = targetHref.replace(/&amp;/g, "&");
+            playUrl = targetHref.startsWith("http") ? targetHref : `${baseUrl}${targetHref.startsWith("/") ? "" : "/"}${targetHref}`;
+          }
         }
       }
     } catch (e) {
