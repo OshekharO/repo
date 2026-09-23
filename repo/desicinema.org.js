@@ -85,16 +85,37 @@ export default class extends Extension {
         const descMatch = res.match(/<div class="Description">([\s\S]+?)<\/div>/);
         const desc = descMatch ? descMatch[1].replace(/<[^>]+>/g, "").trim() : "";
 
+        // Extract option elements (different embed servers like Vidhide, RPMPlay, StrP2P, Vkspeed, etc.)
+        const optionMatches = res.match(/<li[^>]*data-id="[^"]+"[^>]*>[\s\S]+?<\/li>/gi) || [];
+        const serverSources = [];
+
+        optionMatches.forEach((optStr) => {
+            const keyMatch = optStr.match(/data-key="([^"]+)"/);
+            const idMatch = optStr.match(/data-id="([^"]+)"/);
+            const nameMatch = optStr.match(/<p class="AAIco-dns">([^<]+)<\/p>/i) || optStr.match(/Option <span>([^<]+)<\/span>/i);
+
+            const key = keyMatch ? keyMatch[1] : "0";
+            const id = idMatch ? idMatch[1] : null;
+            const serverName = nameMatch ? nameMatch[1].trim() : `Server ${serverSources.length + 1}`;
+            const typeMatch = url.includes("/episode/") ? "2" : "1";
+
+            if (id) {
+                const embedUrl = `https://www.desicinema.org/?trembed=${key}&trid=${id}&trtype=${typeMatch}`;
+                serverSources.push({
+                    name: serverName,
+                    url: embedUrl,
+                });
+            }
+        });
+
         const episodes = [];
 
         // Check if TV Series page or Season page
         if (url.includes("/series/") || url.includes("/season/")) {
-            // Check if there are season links or episode links
             const seasonLinks = res.match(/href="(https:\/\/www\.desicinema\.org\/season\/[^"]+)"/g) || [];
             const episodeUrls = new Set();
 
             if (seasonLinks.length > 0) {
-                // Fetch each season page to get all episode links
                 for (const seasonTag of seasonLinks) {
                     const sUrlMatch = seasonTag.match(/href="([^"]+)"/);
                     if (sUrlMatch) {
@@ -135,17 +156,24 @@ export default class extends Extension {
             }
         }
 
-        // If no episodes found (e.g. movie or fallback), set movie page url
+        // If multiple server sources exist and no episode list yet (or movie page), list servers as options
         if (episodes.length === 0) {
-            episodes.push({
-                title: "Movie",
-                urls: [
-                    {
-                        name: title,
-                        url: url,
-                    },
-                ],
-            });
+            if (serverSources.length > 0) {
+                episodes.push({
+                    title: "Servers",
+                    urls: serverSources,
+                });
+            } else {
+                episodes.push({
+                    title: "Movie",
+                    urls: [
+                        {
+                            name: title,
+                            url: url,
+                        },
+                    ],
+                });
+            }
         }
 
         return {
@@ -279,6 +307,25 @@ export default class extends Extension {
     }
 
     async watch(url) {
+        // If url is already an embed URL (e.g. trembed or player iframe), resolve directly
+        if (url.includes("trembed") || url.includes("rpmplay") || url.includes("vidhide") || url.includes("vkspeed") || url.includes("strp2p")) {
+            const res = await this.extractFromEmbed(url);
+            if (res && res.url) {
+                return {
+                    type: res.type,
+                    url: res.url,
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Referer": "https://www.desicinema.org/",
+                    },
+                };
+            }
+            return {
+                type: "hls",
+                url: url,
+            };
+        }
+
         try {
             const res = await this.request("", {
                 headers: {
@@ -356,7 +403,7 @@ export default class extends Extension {
                 };
             }
 
-            // Fallback 2: Return first embed / iframe URL if available (so iframe embed page is passed instead of movie page URL)
+            // Fallback 2: Return first embed / iframe URL if available
             if (options.length > 0) {
                 return {
                     type: "hls",
