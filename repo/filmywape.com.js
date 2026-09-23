@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         FilmyWape
-// @version      v0.0.1
+// @version      v0.0.2
 // @author       jules
 // @lang         hi
 // @license      MIT
@@ -186,17 +186,66 @@ export default class extends Extension {
   }
 
   async watch(url) {
+    let playUrl = url;
+    let referer = "https://filmywape.com/";
+
+    try {
+      if (url.includes("filesdl.co") || url.includes("/cloud/")) {
+        const uObj = new URL(url.startsWith("http") ? url : `https://new1.filesdl.co${url.startsWith("/") ? "" : "/"}${url}`);
+        const baseUrl = `${uObj.protocol}//${uObj.host}`;
+        referer = baseUrl + "/";
+
+        const res = await this.request("", {
+          headers: {
+            "Miru-Url": url,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://filmywape.com/",
+          },
+        });
+
+        const dlButtons = await this.querySelectorAll(res, "a.dl-button");
+        let targetHref = "";
+
+        for (const btn of dlButtons) {
+          const btnHtml = btn.content;
+          const href = await this.getAttributeText(btnHtml, "a", "href");
+          const aElem = await this.querySelector(btnHtml, "a");
+          const txt = aElem ? await aElem.text : "";
+
+          if (href && href.includes("/l.php?file=")) {
+            if (!targetHref || txt.includes("Cloud Direct") || txt.includes("Direct Download")) {
+              targetHref = href;
+            }
+          }
+        }
+
+        if (!targetHref) {
+          const match = res.match(/href=["'](\/l\.php\?file=[^"']+)["']/i);
+          if (match) {
+            targetHref = match[1];
+          }
+        }
+
+        if (targetHref) {
+          targetHref = targetHref.replace(/&amp;/g, "&");
+          playUrl = targetHref.startsWith("http") ? targetHref : `${baseUrl}${targetHref.startsWith("/") ? "" : "/"}${targetHref}`;
+        }
+      }
+    } catch (e) {
+      // Fallback to original url
+    }
+
     let type = "mp4";
-    if (url.includes(".m3u8") || url.includes("m3u8")) {
+    if (playUrl.includes(".m3u8") || playUrl.includes("m3u8")) {
       type = "hls";
     }
 
     return {
       type: type,
-      url: url,
+      url: playUrl,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": "https://filmywape.com/",
+        "Referer": referer,
       },
     };
   }
