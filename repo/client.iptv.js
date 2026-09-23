@@ -21,7 +21,13 @@ export default class extends Extension {
 			"none": "",
 			"🇨🇳 vbskycn-IPV4": "https://cdn.jsdelivr.net/gh/vbskycn/iptv@master/tv/iptv4.m3u",
 			"🇨🇳 fanmingming-IPV6": "https://live.fanmingming.com/tv/m3u/ipv6.m3u",
-			"🌐 iptv-org": "https://iptv-org.github.io/iptv/index.m3u",
+			"🇨🇳 YueChan-IPV6": "https://cdn.jsdelivr.net/gh/YueChan/Live@main/IPTV.m3u",
+			"🇨🇳 YueChan-Radio": "https://cdn.jsdelivr.net/gh/YueChan/Live@main/Radio.m3u",
+			"🇨🇳 YanG-1989": "https://cdn.jsdelivr.net/gh/YanG-1989/m3u@main/Gather.m3u",
+			"🌐 iptv-org (Global)": "https://iptv-org.github.io/iptv/index.m3u",
+			"🌐 iptv-org (China)": "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/cn.m3u",
+			"🌐 iptv-org (USA)": "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/us.m3u",
+			"🇮🇳 iptv-org (India)": "https://raw.githubusercontent.com/iptv-org/iptv/master/streams/in.m3u",
 			"🌏 Free-TV": "https://cdn.jsdelivr.net/gh/Free-TV/IPTV/playlist.m3u8",
 		}
 	}
