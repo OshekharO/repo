@@ -213,15 +213,17 @@ export default class extends Extension {
       if (sourceMatch) {
         try {
           const directUrl = decodeURIComponent(sourceMatch[1]);
-          return {
-            type: directUrl.includes(".m3u8") ? "hls" : "mp4",
-            url: directUrl,
-            headers: {
-              Referer: "https://kisskh.top/",
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            },
-          };
+          if (directUrl.includes(".m3u8") || directUrl.includes(".mp4")) {
+            return {
+              type: directUrl.includes(".m3u8") ? "hls" : "mp4",
+              url: directUrl,
+              headers: {
+                Referer: "https://kisskh.top/",
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              },
+            };
+          }
         } catch (e) {}
       }
     }
@@ -243,21 +245,21 @@ export default class extends Extension {
       const sourceMatch = iframeSrc.match(/source=([^&"'\s>]+)/i);
       if (sourceMatch) {
         try {
-          directUrl = decodeURIComponent(sourceMatch[1]);
-          break;
+          const decoded = decodeURIComponent(sourceMatch[1]);
+          if (decoded.includes(".m3u8") || decoded.includes(".mp4")) {
+            directUrl = decoded;
+            break;
+          }
         } catch (e) {
-          directUrl = sourceMatch[1];
-          break;
+          if (sourceMatch[1].includes(".m3u8") || sourceMatch[1].includes(".mp4")) {
+            directUrl = sourceMatch[1];
+            break;
+          }
         }
       }
 
-      // If iframe points to YouTube
-      if (iframeSrc.includes("youtube.com/embed/") || iframeSrc.includes("youtu.be/")) {
-        const ytIdMatch = iframeSrc.match(/embed\/([^?&"'\s>]+)/);
-        if (ytIdMatch) {
-          directUrl = `https://www.youtube.com/watch?v=${ytIdMatch[1]}`;
-          break;
-        }
+      // Check if iframe points directly to a media file
+      if (iframeSrc.includes(".m3u8") || iframeSrc.includes(".mp4")) {
         directUrl = iframeSrc;
         break;
       }
@@ -273,16 +275,11 @@ export default class extends Extension {
           });
 
           const fileMatch = iframeRes.match(/"file"\s*:\s*"([^"]+)"/);
-          if (fileMatch) {
+          if (fileMatch && (fileMatch[1].includes(".m3u8") || fileMatch[1].includes(".mp4"))) {
             directUrl = fileMatch[1].replace(/\\/g, "");
             break;
           }
         } catch (e) {}
-      }
-
-      if (iframeSrc.startsWith("http")) {
-        directUrl = iframeSrc;
-        break;
       }
     }
 
@@ -317,11 +314,11 @@ export default class extends Extension {
             if (parsed && parsed.embed_url) {
               const sourceMatch = parsed.embed_url.match(/source=([^&"'\s>]+)/i);
               if (sourceMatch) {
-                directUrl = decodeURIComponent(sourceMatch[1]);
-                break;
-              } else if (parsed.embed_url.startsWith("http")) {
-                directUrl = parsed.embed_url;
-                break;
+                const decoded = decodeURIComponent(sourceMatch[1]);
+                if (decoded.includes(".m3u8") || decoded.includes(".mp4")) {
+                  directUrl = decoded;
+                  break;
+                }
               }
             }
           } catch (e) {}
@@ -335,11 +332,6 @@ export default class extends Extension {
       if (directMatch && !directMatch[0].endsWith(".js") && !directMatch[0].endsWith(".css")) {
         directUrl = directMatch[0];
       }
-    }
-
-    // 4. Absolute fallback to pageUrl
-    if (!directUrl) {
-      directUrl = pageUrl;
     }
 
     const isHls = directUrl.includes(".m3u8");
