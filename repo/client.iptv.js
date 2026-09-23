@@ -1,7 +1,7 @@
 // ==MiruExtension==
 // @name         MyIPTV
 // @description  A simple IPTV client
-// @version      v0.0.6
+// @version      v0.0.7
 // @author       vvsolo
 // @lang         all
 // @license      MIT
@@ -44,13 +44,18 @@ export default class extends Extension {
 		if (this.#cache.exturl && await this.checkExpire()) {
 			return this.#cache.exturl;
 		}
-		const res = await this.request('', {
-			headers: {
-				'Content-Type': 'application/json',
-				'Miru-Url': this.#opts.exturl
-			}
-		});
-		return (this.#cache.exturl = res);
+		try {
+			const res = await this.request('', {
+				headers: {
+					'Content-Type': 'application/json',
+					'Miru-Url': this.#opts.exturl
+				}
+			});
+			const json = typeof res === 'string' ? JSON.parse(res) : res;
+			return (this.#cache.exturl = json);
+		} catch (e) {
+			return null;
+		}
 	}
 
 	async load() {
@@ -91,6 +96,9 @@ export default class extends Extension {
 	}
 
 	async createFilter(filter) {
+		if (!this.#cache.items.length) {
+			await this.latest(1);
+		}
 		const filt = filter?.data && filter.data[0] || '';
 		// multiple groups
 		this.#cache.groups = this.#cache.items
@@ -128,7 +136,9 @@ export default class extends Extension {
 		if (page > 1) {
 			return [];
 		}
-		const baseUrl = (await this.getSetting('builtin')) || (await this.getSetting('source')) || '';
+		const builtin = await this.getSetting('builtin');
+		const source = await this.getSetting('source');
+		const baseUrl = (builtin && builtin !== 'none') ? builtin : (source || '');
 		if (!baseUrl) {
 			throw 'No valid address set!';
 		}
@@ -224,7 +234,9 @@ export default class extends Extension {
 		if (page > 1) {
 			return [];
 		}
-		!~this.#cache.items.length && (await this.latest());
+		if (!this.#cache.items.length) {
+			await this.latest(1);
+		}
 		const filt = filter?.data && filter.data[0] || this.#group.val;
 		const bangumi = this.#cache.items;
 		if (filt === this.#group.val) {
@@ -234,7 +246,13 @@ export default class extends Extension {
 	}
 
 	async detail(url) {
-		const bangumi = this.#cache.items.find((v) => v.url === url);
+		if (!this.#cache.items.length) {
+			await this.latest(1);
+		}
+		const bangumi = this.#cache.items.find((v) => v.url === url || ~v.url.indexOf(url));
+		if (!bangumi) {
+			return null;
+		}
 		const parseUrls = (item) => [...new Set(item.url.split('#'))].map((v, i, t) => {
 			return {
 				name: t.length > 1 ? `${item.title} [${i + 1}]` : `${item.title}`,
@@ -254,7 +272,7 @@ export default class extends Extension {
 				.filter((v) => (v.group && ~`;${v.group};`.indexOf(`;${g};`)))
 				.map((v) => parseUrls(v)) || [];
 
-			~groups.length && bangumi.episodes.push({
+			groups.length && bangumi.episodes.push({
 				title: `[${g}]`,
 				urls: groups.flat()
 			})
@@ -263,12 +281,15 @@ export default class extends Extension {
 	}
 
 	async watch(url) {
+		if (!this.#cache.items.length) {
+			await this.latest(1);
+		}
 		const bangumi = this.#cache.items.find((v) => v.url === url || ~v.url.indexOf(url));
 		const item = {
 			type: 'hls',
 			url
 		}
-		if (('headers' in bangumi) && ~Object.keys(bangumi.headers).length) {
+		if (bangumi?.headers && Object.keys(bangumi.headers).length) {
 			item['headers'] = bangumi.headers
 		}
 		return item;
