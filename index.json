@@ -447,6 +447,19 @@
   "webSite": "https://cj.ffzyapi.com"
  },
  {
+  "author": "jules",
+  "icon": "https://filmywape.com/templates/filmyfly/images/logo.webp",
+  "lang": "hi",
+  "license": "MIT",
+  "name": "FilmyWape",
+  "nsfw": "false",
+  "package": "filmywape.com",
+  "type": "bangumi",
+  "url": "filmywape.com.js",
+  "version": "v0.0.1",
+  "webSite": "https://filmywape.com"
+ },
+ {
   "author": "bethro",
   "icon": "https://flamecomics.xyz/favicon.ico",
   "lang": "en",
