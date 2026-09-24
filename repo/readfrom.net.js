@@ -19,9 +19,17 @@ export default class extends Extension {
       ...options.headers,
     };
 
-    let res = await super.request(url, options);
+    let res;
+    try {
+      res = await super.request(url, options);
+    } catch (e) {
+      // 403 status throws an exception in Miru app client
+      const targetUrl = options?.headers?.["Miru-Url"] || (url ? (url.startsWith("http") ? url : `https://readfrom.net${url.startsWith("/") ? "" : "/"}${url}`) : "https://readfrom.net/");
+      await this.openWebView(targetUrl);
+      res = await super.request(url, options);
+    }
 
-    // Detect Cloudflare anti-bot page or Cloudflare challenge
+    // Detect Cloudflare anti-bot page or Cloudflare challenge in string response
     if (
       typeof res === "string" &&
       (res.includes("Just a moment...") ||
@@ -30,10 +38,7 @@ export default class extends Extension {
         res.includes("Enable JavaScript and cookies to continue"))
     ) {
       const targetUrl = options?.headers?.["Miru-Url"] || (url ? (url.startsWith("http") ? url : `https://readfrom.net${url.startsWith("/") ? "" : "/"}${url}`) : "https://readfrom.net/");
-      // Open WebView so user can complete Cloudflare captcha
       await this.openWebView(targetUrl);
-
-      // Retry request with updated Cloudflare cookies
       res = await super.request(url, options);
     }
 
