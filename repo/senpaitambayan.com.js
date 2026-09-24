@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         Senpai Tambayan
-// @version      v0.0.2
+// @version      v0.0.3
 // @author       jules
 // @lang         en
 // @license      MIT
@@ -175,15 +175,53 @@ export default class extends Extension {
   }
 
   async watch(url) {
-    if (url.includes(".m3u8")) {
+    let targetUrl = url;
+
+    // Handle ok.ru embeds by resolving direct streamable video URL
+    if (targetUrl.includes("ok.ru")) {
+      try {
+        const embedUrl = targetUrl.startsWith("http") ? targetUrl : `https:${targetUrl}`;
+        const res = await this.request("", {
+          headers: {
+            "Miru-Url": embedUrl,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+          },
+        });
+        const html = typeof res === "string" ? res : res?.data || "";
+        const optMatch = html.match(/data-options=["']([^"']+)["']/i);
+        if (optMatch && optMatch[1]) {
+          const unescaped = optMatch[1]
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, "&")
+            .replace(/&#39;/g, "'");
+          const opts = JSON.parse(unescaped);
+          const flashvars = opts.flashvars || {};
+          let metadata = flashvars.metadata;
+          if (typeof metadata === "string") {
+            metadata = JSON.parse(metadata);
+          }
+          if (metadata && Array.isArray(metadata.videos) && metadata.videos.length > 0) {
+            const sorted = metadata.videos.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+            targetUrl = sorted[0].url || targetUrl;
+          } else if (metadata && metadata.hlsManifestUrl) {
+            targetUrl = metadata.hlsManifestUrl;
+          }
+        }
+      } catch (e) {
+        // Fallback to original URL
+      }
+    }
+
+    if (targetUrl.includes(".m3u8")) {
       return {
         type: "hls",
-        url: url,
+        url: targetUrl,
       };
     }
+
     return {
       type: "mp4",
-      url: url,
+      url: targetUrl,
     };
   }
 }
