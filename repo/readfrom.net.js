@@ -12,18 +12,12 @@
 // ==/MiruExtension==
 
 export default class extends Extension {
-  async request(url, options = {}) {
-    options.headers = {
-      "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-      "Referer": "https://readfrom.net/",
-      ...options.headers,
-    };
-
+  async request(url, options) {
     let res;
     try {
       res = await super.request(url, options);
     } catch (e) {
-      // 403 status throws an exception in Miru app client
+      // 403 status or connection error throws an exception in Miru app client
       await this.openWebView("https://readfrom.net/");
       res = await super.request(url, options);
     }
