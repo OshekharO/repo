@@ -1,0 +1,165 @@
+// ==MiruExtension==
+// @name         Senpai Tambayan
+// @version      v0.0.1
+// @author       jules
+// @lang         en
+// @license      MIT
+// @icon         https://senpaitambayan.com/assets/images/favicon.ico
+// @package      senpaitambayan.com
+// @type         bangumi
+// @webSite      https://senpaitambayan.com
+// @description  Watch anime online with Tagalog/Filipino dubs on Senpai Tambayan.
+// ==/MiruExtension==
+
+export default class extends Extension {
+  constructor() {
+    super();
+    this.supabaseUrl = "https://vmkldvrxrbleqexadwdl.supabase.co";
+    this.supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZta2xkdnJ4cmJsZXFleGFkd2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3ODEyMzIsImV4cCI6MjA4NTM1NzIzMn0.JW-qwVjmdyWWLexjZbHT4yfdelahzV34kK_lwW-g18g";
+    this.siteUrl = "https://senpaitambayan.com";
+  }
+
+  async supabaseReq(path, options = {}) {
+    const headers = {
+      apikey: this.supabaseKey,
+      Authorization: `Bearer ${this.supabaseKey}`,
+      ...(options.headers || {}),
+      "Miru-Url": `${this.supabaseUrl}${path}`,
+    };
+    return this.request("", {
+      ...options,
+      headers,
+    });
+  }
+
+  getCoverUrl(imagelink) {
+    if (!imagelink) return "";
+    if (imagelink.startsWith("http")) return imagelink;
+    return `${this.siteUrl}/assets/images/${imagelink}`;
+  }
+
+  async latest(page = 1) {
+    const limit = 20;
+    const offset = (page - 1) * limit;
+    const res = await this.supabaseReq(
+      `/rest/v1/SenapaiViews?select=names,views,weblink,imagelink,ratings,datecreated,genre&order=datecreated.desc&limit=${limit}&offset=${offset}`
+    );
+    if (!Array.isArray(res)) return [];
+    return res.map((item) => ({
+      title: item.names,
+      url: item.weblink,
+      cover: this.getCoverUrl(item.imagelink),
+    }));
+  }
+
+  async search(kw, page = 1) {
+    const limit = 20;
+    const offset = (page - 1) * limit;
+    const encodedKw = encodeURIComponent(`*${kw}*`);
+    const res = await this.supabaseReq(
+      `/rest/v1/SenapaiViews?select=names,views,weblink,imagelink,ratings,datecreated,genre&names=ilike.${encodedKw}&order=views.desc&limit=${limit}&offset=${offset}`
+    );
+    if (!Array.isArray(res)) return [];
+    return res.map((item) => ({
+      title: item.names,
+      url: item.weblink,
+      cover: this.getCoverUrl(item.imagelink),
+    }));
+  }
+
+  async detail(url) {
+    const encodedWeblink = encodeURIComponent(url);
+    const res = await this.supabaseReq(
+      `/rest/v1/SenapaiViews?select=names,views,weblink,imagelink,ratings,datecreated,genre&weblink=eq.${encodedWeblink}`
+    );
+
+    let title = url;
+    let cover = "";
+    let desc = "";
+
+    if (Array.isArray(res) && res.length > 0) {
+      const item = res[0];
+      title = item.names || title;
+      cover = this.getCoverUrl(item.imagelink);
+      const genres = Array.isArray(item.genre) ? item.genre.join(", ") : item.genre || "";
+      desc = `Rating: ${item.ratings || "N/A"} | Views: ${item.views || 0}\nGenres: ${genres}`;
+    }
+
+    const pagePath = url.startsWith("/") ? url : `/anime/${url}`;
+    const pageRes = await this.request("", {
+      headers: {
+        "Miru-Url": `${this.siteUrl}${pagePath}`,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      },
+    });
+
+    const html = typeof pageRes === "string" ? pageRes : pageRes?.data || "";
+
+    const optionRegex = /<option\s+([^>]*)>(.*?)<\/option>/gis;
+    let match;
+    const episodesByServer = {};
+
+    while ((match = optionRegex.exec(html)) !== null) {
+      const attrs = match[1];
+      const optText = match[2].replace(/<[^>]+>/g, "").trim();
+
+      if (!optText || optText.toLowerCase().includes("select episode")) continue;
+
+      const serverRegex = /data-(server\d*)=["']([^"']+)["']/gi;
+      let sMatch;
+      while ((sMatch = serverRegex.exec(attrs)) !== null) {
+        const serverKey = sMatch[1].toLowerCase();
+        let videoUrl = sMatch[2].trim();
+        if (!videoUrl || videoUrl.includes("server2") || videoUrl === "#") continue;
+
+        const serverNum = serverKey.replace("server", "");
+        const serverName = `Server ${serverNum}`;
+        if (!episodesByServer[serverName]) {
+          episodesByServer[serverName] = [];
+        }
+
+        episodesByServer[serverName].push({
+          name: optText,
+          url: videoUrl,
+        });
+      }
+    }
+
+    const episodeGroups = [];
+    for (const [sName, urls] of Object.entries(episodesByServer)) {
+      if (urls.length > 0) {
+        episodeGroups.push({
+          title: sName,
+          urls: urls,
+        });
+      }
+    }
+
+    if (episodeGroups.length === 0) {
+      episodeGroups.push({
+        title: "Episodes",
+        urls: [{ name: "Watch", url: `${this.siteUrl}${pagePath}` }],
+      });
+    }
+
+    return {
+      title,
+      cover,
+      desc,
+      episodes: episodeGroups,
+    };
+  }
+
+  async watch(url) {
+    if (url.includes(".m3u8")) {
+      return {
+        type: "hls",
+        url: url,
+      };
+    }
+    return {
+      type: "mp4",
+      url: url,
+    };
+  }
+}
