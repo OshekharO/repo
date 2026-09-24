@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         Senpai Tambayan
-// @version      v0.0.1
+// @version      v0.0.2
 // @author       jules
 // @lang         en
 // @license      MIT
@@ -75,14 +75,17 @@ export default class extends Extension {
 
     let title = url;
     let cover = "";
-    let desc = "";
+    let genres = "";
+    let ratings = "N/A";
+    let views = 0;
 
     if (Array.isArray(res) && res.length > 0) {
       const item = res[0];
       title = item.names || title;
       cover = this.getCoverUrl(item.imagelink);
-      const genres = Array.isArray(item.genre) ? item.genre.join(", ") : item.genre || "";
-      desc = `Rating: ${item.ratings || "N/A"} | Views: ${item.views || 0}\nGenres: ${genres}`;
+      genres = Array.isArray(item.genre) ? item.genre.join(", ") : item.genre || "";
+      ratings = item.ratings || "N/A";
+      views = item.views || 0;
     }
 
     const pagePath = url.startsWith("/") ? url : `/anime/${url}`;
@@ -94,6 +97,18 @@ export default class extends Extension {
     });
 
     const html = typeof pageRes === "string" ? pageRes : pageRes?.data || "";
+
+    let siteSummary = "";
+    const metaMatch = html.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
+    if (metaMatch && metaMatch[1]) {
+      siteSummary = metaMatch[1].trim();
+    }
+
+    const descLines = [];
+    if (siteSummary) descLines.push(siteSummary);
+    descLines.push(`Rating: ${ratings} | Views: ${views}`);
+    if (genres) descLines.push(`Genres: ${genres}`);
+    const desc = descLines.join("\n\n");
 
     const optionRegex = /<option\s+([^>]*)>(.*?)<\/option>/gis;
     let match;
@@ -110,7 +125,16 @@ export default class extends Extension {
       while ((sMatch = serverRegex.exec(attrs)) !== null) {
         const serverKey = sMatch[1].toLowerCase();
         let videoUrl = sMatch[2].trim();
-        if (!videoUrl || videoUrl.includes("server2") || videoUrl === "#") continue;
+
+        if (
+          !videoUrl ||
+          videoUrl === "#" ||
+          videoUrl.includes("XXXXX") ||
+          videoUrl.includes("your-video-link") ||
+          (!videoUrl.startsWith("http://") && !videoUrl.startsWith("https://") && !videoUrl.startsWith("//"))
+        ) {
+          continue;
+        }
 
         const serverNum = serverKey.replace("server", "");
         const serverName = `Server ${serverNum}`;
