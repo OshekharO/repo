@@ -1150,6 +1150,19 @@
   "webSite": "https://readcomicsonline.lol"
  },
  {
+  "author": "OshekharO",
+  "icon": "https://static.readfrom.net//templates/readfromnet/images/logo41.png",
+  "lang": "en",
+  "license": "MIT",
+  "name": "Read From Net",
+  "nsfw": "false",
+  "package": "readfrom.net",
+  "type": "fikushon",
+  "url": "readfrom.net.js",
+  "version": "v0.0.1",
+  "webSite": "https://readfrom.net"
+ },
+ {
   "author": "MiaoMint",
   "lang": "zh-cn",
   "license": "MIT",
