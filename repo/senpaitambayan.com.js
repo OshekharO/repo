@@ -19,6 +19,39 @@ export default class extends Extension {
     this.siteUrl = "https://senpaitambayan.com";
   }
 
+  async createFilter(filter) {
+    const genresOptions = {
+      "": "All",
+      "Action": "Action",
+      "Adventure": "Adventure",
+      "Comedy": "Comedy",
+      "Drama": "Drama",
+      "Fantasy": "Fantasy",
+      "Isekai": "Isekai",
+      "Magic": "Magic",
+      "Martial Arts": "Martial Arts",
+      "Movie": "Movie",
+      "Mystery": "Mystery",
+      "Romance": "Romance",
+      "School": "School",
+      "Sci-Fi": "Sci-Fi",
+      "Shounen": "Shounen",
+      "Slice of Life": "Slice of Life",
+      "Sports": "Sports",
+      "Supernatural": "Supernatural",
+    };
+
+    return {
+      genres: {
+        title: "Genres",
+        max: 1,
+        min: 0,
+        default: "",
+        options: genresOptions,
+      },
+    };
+  }
+
   async supabaseReq(path, options = {}) {
     const headers = {
       apikey: this.supabaseKey,
@@ -38,11 +71,19 @@ export default class extends Extension {
     return `${this.siteUrl}/assets/images/${imagelink}`;
   }
 
-  async latest(page = 1) {
+  async latest(page = 1, filter) {
     const limit = 20;
     const offset = (page - 1) * limit;
+
+    let genreFilter = "";
+    if (filter && filter.genres && filter.genres[0]) {
+      const selectedGenre = filter.genres[0];
+      const encodedGenre = encodeURIComponent(`["${selectedGenre}"]`);
+      genreFilter = `&genre=cs.${encodedGenre}`;
+    }
+
     const res = await this.supabaseReq(
-      `/rest/v1/SenapaiViews?select=names,views,weblink,imagelink,ratings,datecreated,genre&order=datecreated.desc&limit=${limit}&offset=${offset}`
+      `/rest/v1/SenapaiViews?select=names,views,weblink,imagelink,ratings,datecreated,genre${genreFilter}&order=datecreated.desc&limit=${limit}&offset=${offset}`
     );
     if (!Array.isArray(res)) return [];
     return res.map((item) => ({
@@ -52,12 +93,20 @@ export default class extends Extension {
     }));
   }
 
-  async search(kw, page = 1) {
+  async search(kw, page = 1, filter) {
     const limit = 20;
     const offset = (page - 1) * limit;
+
+    let genreFilter = "";
+    if (filter && filter.genres && filter.genres[0]) {
+      const selectedGenre = filter.genres[0];
+      const encodedGenre = encodeURIComponent(`["${selectedGenre}"]`);
+      genreFilter = `&genre=cs.${encodedGenre}`;
+    }
+
     const encodedKw = encodeURIComponent(`*${kw}*`);
     const res = await this.supabaseReq(
-      `/rest/v1/SenapaiViews?select=names,views,weblink,imagelink,ratings,datecreated,genre&names=ilike.${encodedKw}&order=views.desc&limit=${limit}&offset=${offset}`
+      `/rest/v1/SenapaiViews?select=names,views,weblink,imagelink,ratings,datecreated,genre&names=ilike.${encodedKw}${genreFilter}&order=views.desc&limit=${limit}&offset=${offset}`
     );
     if (!Array.isArray(res)) return [];
     return res.map((item) => ({
