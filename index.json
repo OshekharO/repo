@@ -1252,16 +1252,16 @@
   "webSite": "https://senlinzy.com"
  },
  {
-  "author": "jules",
+  "author": "OshekharO",
   "description": "Tambayan.",
   "icon": "https://senpaitambayan.com/assets/images/favicon.ico",
-  "lang": "en",
+  "lang": "fil",
   "license": "MIT",
   "name": "Tambayan",
   "package": "senpaitambayan.com",
   "type": "bangumi",
   "url": "senpaitambayan.com.js",
-  "version": "v0.0.3",
+  "version": "v0.0.1",
   "webSite": "https://senpaitambayan.com"
  },
  {

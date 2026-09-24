@@ -1,8 +1,8 @@
 // ==MiruExtension==
 // @name         Senpai Tambayan
-// @version      v0.0.3
-// @author       jules
-// @lang         en
+// @version      v0.0.1
+// @author       OshekharO
+// @lang         fil
 // @license      MIT
 // @icon         https://senpaitambayan.com/assets/images/favicon.ico
 // @package      senpaitambayan.com
