@@ -14,7 +14,7 @@
 export default class extends Extension {
   async request(url, options = {}) {
     options.headers = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
       "Referer": "https://readfrom.net/",
       ...options.headers,
     };
@@ -24,8 +24,7 @@ export default class extends Extension {
       res = await super.request(url, options);
     } catch (e) {
       // 403 status throws an exception in Miru app client
-      const targetUrl = options?.headers?.["Miru-Url"] || (url ? (url.startsWith("http") ? url : `https://readfrom.net${url.startsWith("/") ? "" : "/"}${url}`) : "https://readfrom.net/");
-      await this.openWebView(targetUrl);
+      await this.openWebView("https://readfrom.net/");
       res = await super.request(url, options);
     }
 
@@ -34,11 +33,11 @@ export default class extends Extension {
       typeof res === "string" &&
       (res.includes("Just a moment...") ||
         res.includes("cf-mitigation") ||
+        res.includes("403 Forbidden") ||
         res.includes("Attention Required! | Cloudflare") ||
         res.includes("Enable JavaScript and cookies to continue"))
     ) {
-      const targetUrl = options?.headers?.["Miru-Url"] || (url ? (url.startsWith("http") ? url : `https://readfrom.net${url.startsWith("/") ? "" : "/"}${url}`) : "https://readfrom.net/");
-      await this.openWebView(targetUrl);
+      await this.openWebView("https://readfrom.net/");
       res = await super.request(url, options);
     }
 
@@ -146,7 +145,7 @@ export default class extends Extension {
 
   async latest(page) {
     const pageNum = page || 1;
-    const url = pageNum === 1 ? "/allbooks/" : `/allbooks/page/${pageNum}/`;
+    const url = pageNum === 1 ? "/" : `/allbooks/page/${pageNum}/`;
     const res = await this.request(url);
     return this.parseBookList(res);
   }
