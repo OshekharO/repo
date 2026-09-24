@@ -162,9 +162,10 @@ export default class extends Extension {
     let title = "";
     const ogTitleMatch = res.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
                          res.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i) ||
-                         res.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+                         res.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) ||
+                         res.match(/center\s*>\s*<h2[^>]*class=["']title["'][^>]*>([\s\S]*?)<\/h2>/i);
     if (ogTitleMatch) {
-      title = this.decodeHTML(ogTitleMatch[1].replace(/<[^>]+>/g, "").trim());
+      title = this.decodeHTML(ogTitleMatch[1].replace(/<[^>]+>/g, "").trim().split(", \n\n")[0]);
     }
 
     // Cover
@@ -183,46 +184,68 @@ export default class extends Extension {
 
     // Description / Synopsis
     let desc = "";
-    const ogDescMatch = res.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
-                        res.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
-    if (ogDescMatch) {
-      desc = this.decodeHTML(ogDescMatch[1].trim());
+    const descBlockMatch = res.match(/<div[^>]+class=["'](?:text3|text5)["'][^>]*>([\s\S]*?)<\/div>/i) ||
+                           res.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i);
+    if (descBlockMatch) {
+      desc = this.decodeHTML(descBlockMatch[1].replace(/<[^>]+>/g, " ").trim());
     }
 
-    // Find max page number in pagination
-    const pageMatches = [...res.matchAll(/page,(\d+),/gi)];
-    let maxPage = 1;
-    for (const pm of pageMatches) {
-      const p = parseInt(pm[1], 10);
-      if (!isNaN(p) && p > maxPage) {
-        maxPage = p;
+    // Chapters / Pages list from div.pages
+    const pageUrls = [
+      {
+        name: "Page 1",
+        url: url,
+      },
+    ];
+
+    const pagesBlockMatch = res.match(/<div[^>]+class=["'][^"']*pages[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
+    if (pagesBlockMatch) {
+      const pageLinks = [...pagesBlockMatch[1].matchAll(/<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
+      for (const linkMatch of pageLinks) {
+        let href = linkMatch[1].trim();
+        if (href.startsWith("https://readfrom.net")) {
+          href = href.replace("https://readfrom.net", "");
+        }
+        if (!href.startsWith("/")) {
+          href = "/" + href;
+        }
+        const name = this.decodeHTML(linkMatch[2].replace(/<[^>]+>/g, "").trim()) || `Page ${pageUrls.length + 1}`;
+        if (!pageUrls.some((p) => p.url === href)) {
+          pageUrls.push({
+            name,
+            url: href,
+          });
+        }
+      }
+    } else {
+      // Fallback: search for page,N, links
+      const pageMatches = [...res.matchAll(/page,(\d+),/gi)];
+      let maxPage = 1;
+      for (const pm of pageMatches) {
+        const p = parseInt(pm[1], 10);
+        if (!isNaN(p) && p > maxPage) {
+          maxPage = p;
+        }
+      }
+      for (let i = 2; i <= maxPage; i++) {
+        const pageUrl = url.replace(/(\d+-[^/]+\.html)/, `page,${i},$1`);
+        pageUrls.push({
+          name: `Page ${i}`,
+          url: pageUrl,
+        });
       }
     }
-
-    const episodes = [];
-    const pageUrls = [];
-
-    for (let i = 1; i <= maxPage; i++) {
-      let pageUrl = url;
-      if (i > 1) {
-        pageUrl = url.replace(/(\d+-[^/]+\.html)/, `page,${i},$1`);
-      }
-      pageUrls.push({
-        name: `Page ${i}`,
-        url: pageUrl,
-      });
-    }
-
-    episodes.push({
-      title: "Pages",
-      urls: pageUrls,
-    });
 
     return {
       title,
       cover,
       desc,
-      episodes,
+      episodes: [
+        {
+          title: "Pages",
+          urls: pageUrls,
+        },
+      ],
     };
   }
 
@@ -237,19 +260,27 @@ export default class extends Extension {
       title = this.decodeHTML(titleMatch[1].replace(/<[^>]+>/g, "").trim());
     }
 
-    // Process content body
-    let rawContent = typeof res === "string" ? res : JSON.stringify(res || {});
+    // Extract #textToRead container if available
+    let textToRead = "";
+    const textToReadMatch = res.match(/<div[^>]+id=["']textToRead["'][^>]*>([\s\S]*?)<\/div>/i);
+    if (textToReadMatch) {
+      textToRead = textToReadMatch[1];
+    } else {
+      textToRead = typeof res === "string" ? res : JSON.stringify(res || {});
+    }
 
-    // Remove scripts and styles
-    rawContent = rawContent.replace(/<script[\s\S]*?<\/script>/gi, "")
-                           .replace(/<style[\s\S]*?<\/style>/gi, "");
+    // Clean scripts, styles, center tags, empty spans
+    textToRead = textToRead.replace(/<script[\s\S]*?<\/script>/gi, "")
+                           .replace(/<style[\s\S]*?<\/style>/gi, "")
+                           .replace(/<center[\s\S]*?<\/center>/gi, "")
+                           .replace(/<span[^>]*><\/span>/gi, "");
 
     // Convert breaks and block elements to newlines
-    rawContent = rawContent.replace(/<br\s*\/?>/gi, "\n")
+    textToRead = textToRead.replace(/<br\s*\/?>/gi, "\n")
                            .replace(/<\/(?:p|div|li|h[1-6])>/gi, "\n")
                            .replace(/<[^>]+>/g, "");
 
-    const lines = rawContent.split("\n");
+    const lines = textToRead.split("\n");
     const content = [];
 
     const ignorePhrases = [
@@ -267,7 +298,7 @@ export default class extends Extension {
       if (!line) continue;
 
       const lower = line.toLowerCase();
-      if (ignorePhrases.some(phrase => lower.includes(phrase))) {
+      if (ignorePhrases.some((phrase) => lower.includes(phrase))) {
         continue;
       }
 
