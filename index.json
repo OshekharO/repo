@@ -1086,6 +1086,18 @@
   "webSite": "https://onejav.com"
  },
  {
+  "author": "OshekharO",
+  "description": "Tamilarasan",
+  "lang": "ta",
+  "license": "MIT",
+  "name": "Tamilarasan",
+  "package": "online.tamilarasan",
+  "type": "bangumi",
+  "url": "online.tamilarasan.js",
+  "version": "v0.0.1",
+  "webSite": "https://tamilarasan.online"
+ },
+ {
   "author": "Nazz",
   "icon": "https://otakudesu.cloud/wp-content/uploads/2017/06/Logo-1.png",
   "lang": "id",
