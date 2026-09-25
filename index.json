@@ -282,7 +282,7 @@
  },
  {
   "author": "vvsolo",
-  "icon": "http://mxsmh01.top/static/images/favicon.ico",
+  "icon": "https://www.mxsmh01.top/static/images/favicon.ico",
   "lang": "zh-tw",
   "license": "MIT",
   "name": "愛看漫畫",
@@ -291,7 +291,7 @@
   "type": "manga",
   "url": "com.freexcomic.js",
   "version": "v0.0.3",
-  "webSite": "http://"
+  "webSite": "https://www.mxsmh01.top"
  },
  {
   "author": "vvsolo",
@@ -1553,7 +1553,7 @@
   "type": "bangumi",
   "url": "vod.api.json.collection.js",
   "version": "v0.0.3",
-  "webSite": "https://"
+  "webSite": "https://api.apibdzy.com"
  },
  {
   "author": "Bad",
@@ -1565,7 +1565,7 @@
   "type": "bangumi",
   "url": "vod.api.json.collection18.js",
   "version": "v0.0.1",
-  "webSite": "https://"
+  "webSite": "https://91md.me"
  },
  {
   "author": "Horis",
@@ -1626,7 +1626,7 @@
   "type": "fikushon",
   "url": "wnmtl.org.js",
   "version": "v0.0.1",
-  "webSite": "https://api.mystorywave.com/story-wave-backend/api/v1/content"
+  "webSite": "https://wnmtl.com"
  },
  {
   "author": "hualiong",

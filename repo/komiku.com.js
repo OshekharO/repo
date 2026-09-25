@@ -22,7 +22,7 @@ export default class extends Extension {
 	]);
 
     async load() {
-		this.registerSetting({
+		await this.registerSetting({
 			title: "Komiku.com",
 			key: "domain_komiku.com",
 			type: "input",
