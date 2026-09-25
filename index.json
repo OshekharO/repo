@@ -152,7 +152,7 @@
   "type": "bangumi",
   "url": "aosikazy.com.js",
   "version": "v0.0.2",
-  "webSite": "https://aosikazy.vip"
+  "webSite": "https://aosikazy.com"
  },
  {
   "author": "vvsolo",
@@ -740,7 +740,7 @@
   "type": "manga",
   "url": "komiku.com.js",
   "version": "v0.0.1",
-  "webSite": "https://komiku.com"
+  "webSite": "https://komiku.id"
  },
  {
   "author": "ZenZEE",
@@ -1440,7 +1440,7 @@
   "type": "bangumi",
   "url": "tiankongzy.com.js",
   "version": "v0.0.2",
-  "webSite": "https://tiankongzy.com"
+  "webSite": "https://api.tiankongapi.com"
  },
  {
   "author": "zj",
@@ -1831,6 +1831,6 @@
   "type": "bangumi",
   "url": "yzzy.tv.js",
   "version": "v0.0.2",
-  "webSite": "https://yzzy.tv"
+  "webSite": "https://api.1080zyku.com"
  }
 ]
