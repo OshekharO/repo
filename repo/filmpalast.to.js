@@ -192,9 +192,9 @@ export default class extends Extension {
         return { type: "hls", url: "" };
       }
 
-      let targetUrl = url;
+      const hosterUrls = [];
 
-      // If this is a Filmpalast episode URL (series episode detail), fetch hosters from it
+      // If this is a Filmpalast page/episode URL, collect all hoster stream URLs from it
       if (url.includes("filmpalast.to/stream/")) {
         const fullUrl = url.startsWith("http")
           ? url
@@ -212,80 +212,90 @@ export default class extends Extension {
         for (const hb of hosterBlocks) {
           const hUrl = hb.match(/data-player-url="([^"]+)"/) || hb.match(/href="([^"]+)"/);
           if (hUrl && hUrl[1] && !hUrl[1].includes("filmpalast.to") && !hUrl[1].startsWith("#")) {
-            targetUrl = hUrl[1];
-            break;
+            let u = hUrl[1];
+            if (u.startsWith("//")) {
+              u = "https:" + u;
+            }
+            if (!hosterUrls.includes(u)) {
+              hosterUrls.push(u);
+            }
           }
         }
+      } else {
+        let u = url;
+        if (u.startsWith("//")) {
+          u = "https:" + u;
+        }
+        hosterUrls.push(u);
       }
 
-      if (targetUrl.startsWith("//")) {
-        targetUrl = "https:" + targetUrl;
-      }
-
-      // Check if direct stream or embed page
-      if (targetUrl.includes(".m3u8") || targetUrl.includes(".mp4")) {
-        return {
-          type: targetUrl.includes(".mp4") ? "mp4" : "hls",
-          url: targetUrl,
-        };
-      }
-
-      // Use prov-extractor API to extract direct stream URL
-      try {
-        const apiUrl = `https://prov-extractor.vercel.app/api/extract?url=${encodeURIComponent(targetUrl)}`;
-        const extractorRes = await this.request("", {
-          headers: {
-            "Miru-Url": apiUrl,
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          },
-        });
-
-        const data = typeof extractorRes === "string" ? JSON.parse(extractorRes) : extractorRes;
-        if (data && data.success && data.streamUrl) {
+      // Iterate through collected hoster URLs until one returns a working stream
+      for (let targetUrl of hosterUrls) {
+        // Check if direct stream URL already
+        if (targetUrl.includes(".m3u8") || targetUrl.includes(".mp4")) {
           return {
-            type: (data.type && data.type.includes("mp4")) || data.streamUrl.includes(".mp4") ? "mp4" : "hls",
-            url: data.streamUrl,
-            headers: data.headers || {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            },
+            type: targetUrl.includes(".mp4") ? "mp4" : "hls",
+            url: targetUrl,
           };
         }
-      } catch (e) {
-        // Fall back if extractor API fails
-      }
 
-      // Fallback: resolve embed page HTML directly for video source
-      let directUrl = targetUrl;
-      let headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      };
+        // Try prov-extractor API first
+        try {
+          const apiUrl = `https://prov-extractor.vercel.app/api/extract?url=${encodeURIComponent(targetUrl)}`;
+          const extractorRes = await this.request("", {
+            headers: {
+              "Miru-Url": apiUrl,
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            },
+          });
 
-      try {
-        const embedRes = await this.request("", {
-          headers: {
-            "Miru-Url": targetUrl,
-            "User-Agent": headers["User-Agent"],
-          },
-        });
-
-        if (typeof embedRes === "string") {
-          const m3u8Match = embedRes.match(/https?:\/\/[^\s'"]+\.m3u8[^\s'"]*/);
-          const mp4Match = embedRes.match(/https?:\/\/[^\s'"]+\.mp4[^\s'"]*/);
-
-          if (m3u8Match) {
-            directUrl = m3u8Match[0];
-          } else if (mp4Match) {
-            directUrl = mp4Match[0];
+          const data = typeof extractorRes === "string" ? JSON.parse(extractorRes) : extractorRes;
+          if (data && data.success && data.streamUrl) {
+            return {
+              type: (data.type && data.type.includes("mp4")) || data.streamUrl.includes(".mp4") ? "mp4" : "hls",
+              url: data.streamUrl,
+              headers: data.headers || {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+              },
+            };
           }
+        } catch (e) {
+          // Ignore error and try direct embed HTML resolution or next hoster
         }
-      } catch (e) {
-        // Fall back to targetUrl
+
+        // Fallback: resolve embed page HTML directly for video source
+        try {
+          const embedRes = await this.request("", {
+            headers: {
+              "Miru-Url": targetUrl,
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            },
+          });
+
+          if (typeof embedRes === "string") {
+            const m3u8Match = embedRes.match(/https?:\/\/[^\s'"]+\.m3u8[^\s'"]*/);
+            const mp4Match = embedRes.match(/https?:\/\/[^\s'"]+\.mp4[^\s'"]*/);
+
+            const directUrl = m3u8Match ? m3u8Match[0] : mp4Match ? mp4Match[0] : null;
+            if (directUrl) {
+              return {
+                type: directUrl.includes(".mp4") ? "mp4" : "hls",
+                url: directUrl,
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                },
+              };
+            }
+          }
+        } catch (e) {
+          // Try next hoster
+        }
       }
 
+      // If no hoster succeeded, return empty
       return {
-        type: directUrl.includes(".mp4") ? "mp4" : "hls",
-        url: directUrl,
-        headers,
+        type: "hls",
+        url: "",
       };
     } catch (e) {
       return {
