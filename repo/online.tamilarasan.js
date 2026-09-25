@@ -114,29 +114,74 @@ export default class Tamilarasan extends Extension {
   }
 
   async watch(url) {
-    const apiUrl = `https://prov-extractor.vercel.app/api/extract?url=${encodeURIComponent(url)}`;
-    const res = await this.request(apiUrl);
-    const data = typeof res === 'string' ? JSON.parse(res) : res;
+    let targetUrl = url;
 
-    const streamUrl =
-      data?.streamUrl ||
-      data?.url ||
-      data?.stream ||
-      (Array.isArray(data?.streams) && data.streams[0]?.url) ||
-      (Array.isArray(data?.sources) && data.sources[0]?.url) ||
-      '';
-
-    if (!streamUrl) {
-      throw new Error('Failed to extract direct stream URL');
+    // Domain alias fix
+    if (targetUrl.includes('hgcloud.to')) {
+      targetUrl = targetUrl.replace('hgcloud.to', 'hanerix.com');
     }
 
-    const isMp4 = (data?.type && data.type.includes('mp4')) || streamUrl.includes('.mp4');
+    // Try prov-extractor API safely
+    try {
+      const apiUrl = `https://prov-extractor.vercel.app/api/extract?url=${encodeURIComponent(targetUrl)}`;
+      const res = await this.request(apiUrl);
+      if (res) {
+        const data = typeof res === 'string' ? JSON.parse(res) : res;
+        const streamUrl =
+          data?.streamUrl ||
+          data?.url ||
+          data?.stream ||
+          (Array.isArray(data?.streams) && data.streams[0]?.url) ||
+          (Array.isArray(data?.sources) && data.sources[0]?.url);
+
+        if (streamUrl) {
+          const isMp4 = (data?.type && data.type.includes('mp4')) || streamUrl.includes('.mp4');
+          return {
+            type: isMp4 ? 'mp4' : 'hls',
+            url: streamUrl,
+            headers: data?.headers || {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            },
+          };
+        }
+      }
+    } catch (e) {
+      console.log('prov-extractor error: ' + e);
+    }
+
+    // Fallback parsing for OK.ru
+    if (targetUrl.includes('ok.ru')) {
+      try {
+        const res = await this.request(targetUrl);
+        if (typeof res === 'string') {
+          const hlsMatch = res.match(/hlsManifestUrl&quot;:&quot;(.*?)&quot;/);
+          if (hlsMatch) {
+            const hlsUrl = hlsMatch[1].replace(/\\u0026/g, '&');
+            return {
+              type: 'hls',
+              url: hlsUrl,
+            };
+          }
+          const videoMatch = res.match(/&quot;url&quot;:&quot;(.*?)&quot;/g);
+          if (videoMatch && videoMatch.length > 0) {
+            const lastVideo = videoMatch[videoMatch.length - 1];
+            const mp4Url = lastVideo.match(/&quot;url&quot;:&quot;(.*?)&quot;/)[1].replace(/\\u0026/g, '&');
+            return {
+              type: 'mp4',
+              url: mp4Url,
+            };
+          }
+        }
+      } catch (e) {
+        console.log('Error parsing OK.ru video: ' + e);
+      }
+    }
+
+    // Default safe fallback so no DioException 500 is thrown
+    const isMp4 = targetUrl.includes('.mp4');
     return {
       type: isMp4 ? 'mp4' : 'hls',
-      url: streamUrl,
-      headers: data?.headers || {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
+      url: targetUrl,
     };
   }
 }
