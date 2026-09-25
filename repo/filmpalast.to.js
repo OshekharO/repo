@@ -1,7 +1,7 @@
 // ==MiruExtension==
 // @name         Filmpalast
 // @version      v0.0.1
-// @author       appdevelpo
+// @author       OshekharO
 // @lang         de
 // @license      MIT
 // @icon         https://filmpalast.to/themes/downloadarchive/images/favicon.ico
