@@ -60,7 +60,11 @@ export default class Tamilarasan extends Extension {
   }
 
   async detail(url) {
-    const res = await this.request(url);
+    const res = await this.request("", {
+      headers: {
+        "Miru-Url": url,
+      },
+    });
 
     const titleMatch = res.match(/<h1[^>]*>(.*?)<\/h1>/s);
     const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : '';
@@ -121,10 +125,15 @@ export default class Tamilarasan extends Extension {
       targetUrl = targetUrl.replace('hgcloud.to', 'hanerix.com');
     }
 
-    // Try prov-extractor API safely
+    // Try prov-extractor API safely using Miru-Url header
     try {
       const apiUrl = `https://prov-extractor.vercel.app/api/extract?url=${encodeURIComponent(targetUrl)}`;
-      const res = await this.request(apiUrl);
+      const res = await this.request("", {
+        headers: {
+          "Miru-Url": apiUrl,
+        },
+      });
+
       if (res) {
         const data = typeof res === 'string' ? JSON.parse(res) : res;
         const streamUrl =
@@ -140,7 +149,8 @@ export default class Tamilarasan extends Extension {
             type: isMp4 ? 'mp4' : 'hls',
             url: streamUrl,
             headers: data?.headers || {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Referer': targetUrl.includes('ok.ru') ? 'https://ok.ru' : targetUrl,
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             },
           };
         }
@@ -152,7 +162,11 @@ export default class Tamilarasan extends Extension {
     // Fallback parsing for OK.ru
     if (targetUrl.includes('ok.ru')) {
       try {
-        const res = await this.request(targetUrl);
+        const res = await this.request("", {
+          headers: {
+            "Miru-Url": targetUrl,
+          },
+        });
         if (typeof res === 'string') {
           const hlsMatch = res.match(/hlsManifestUrl&quot;:&quot;(.*?)&quot;/);
           if (hlsMatch) {
