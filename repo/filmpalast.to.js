@@ -230,7 +230,31 @@ export default class extends Extension {
         };
       }
 
-      // Resolve embed page for video source link
+      // Use prov-extractor API to extract direct stream URL
+      try {
+        const apiUrl = `https://prov-extractor.vercel.app/api/extract?url=${encodeURIComponent(targetUrl)}`;
+        const extractorRes = await this.request("", {
+          headers: {
+            "Miru-Url": apiUrl,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          },
+        });
+
+        const data = typeof extractorRes === "string" ? JSON.parse(extractorRes) : extractorRes;
+        if (data && data.success && data.streamUrl) {
+          return {
+            type: (data.type && data.type.includes("mp4")) || data.streamUrl.includes(".mp4") ? "mp4" : "hls",
+            url: data.streamUrl,
+            headers: data.headers || {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            },
+          };
+        }
+      } catch (e) {
+        // Fall back if extractor API fails
+      }
+
+      // Fallback: resolve embed page HTML directly for video source
       let directUrl = targetUrl;
       let headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
