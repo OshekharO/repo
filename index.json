@@ -545,7 +545,7 @@
   "package": "hanime1.me",
   "type": "bangumi",
   "url": "hanime1.me.js",
-  "version": "v0.0.1",
+  "version": "v0.0.2",
   "webSite": "https://hanime1.me"
  },
  {
@@ -1689,7 +1689,7 @@
   "package": "xhamster.com",
   "type": "bangumi",
   "url": "xhamster.com.js",
-  "version": "v0.0.1",
+  "version": "v0.0.2",
   "webSite": "https://xhamster.com"
  },
  {
