@@ -1,12 +1,12 @@
 // ==MiruExtension==
 // @name         EroticMV
-// @version      v0.0.1
+// @version      v0.0.2
 // @author       OshekharO
 // @lang         all
 // @license      MIT
+// @icon         https://eroticmv.com/wp-content/uploads/2020/05/cropped-favicon-32x32-1-192x192.png
 // @package      eroticmv.com
 // @type         bangumi
-// @icon         https://eroticmv.com/wp-content/uploads/2020/05/cropped-favicon-32x32-1-192x192.png
 // @webSite      https://eroticmv.com
 // @nsfw         true
 // ==/MiruExtension==
@@ -14,37 +14,44 @@
 export default class extends Extension {
   async latest(page) {
     const res = await this.request(`/page/${page}/`);
-    const bsxList = await this.querySelectorAll(res, "article.post-item.site__col");
+    const bsxList = await this.querySelectorAll(res, "article.float-video-box");
     const novel = [];
     for (const element of bsxList) {
       const html = await element.content;
       const url = await this.getAttributeText(html, "a", "href");
-      const title = await this.querySelector(html, "h3 > a").text;
-      const cover = await this.querySelector(html, "img").getAttributeText("src");
-      novel.push({
-        title: title.trim(),
-        url,
-        cover,
-      });
+      const titleEl = await this.querySelector(html, "h3 > a, h6 > a");
+      const title = titleEl ? (await titleEl.text).trim() : "EroticMV Video";
+      const cover = await this.getAttributeText(html, "img", "src");
+      if (url) {
+        novel.push({
+          title,
+          url,
+          cover: cover || "",
+        });
+      }
     }
     return novel;
   }
 
   async search(kw) {
-    const res = await this.request(`/?s=${kw}`);
-    const bsxList = await this.querySelectorAll(res, "article.post-item.site__col");
+    const kwstring = kw.replace(/ /g, '+');
+    const res = await this.request(`/?s=${kwstring}`);
+    const bsxList = await this.querySelectorAll(res, "article.float-video-box");
     const novel = [];
 
     for (const element of bsxList) {
       const html = await element.content;
       const url = await this.getAttributeText(html, "a", "href");
-      const title = await this.querySelector(html, "h3 > a").text;
-      const cover = await this.querySelector(html, "img").getAttributeText("src");
-      novel.push({
-        title,
-        url,
-        cover,
-      });
+      const titleEl = await this.querySelector(html, "h3 > a, h6 > a");
+      const title = titleEl ? (await titleEl.text).trim() : "EroticMV Video";
+      const cover = await this.getAttributeText(html, "img", "src");
+      if (url) {
+        novel.push({
+          title,
+          url,
+          cover: cover || "",
+        });
+      }
     }
     return novel;
   }
@@ -53,26 +60,24 @@ export default class extends Extension {
     const res = await this.request("", {
       headers: {
         "Miru-Url": url,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
 
-    const title = await this.querySelector(res, "div.float-video-title > h6").text;
-    const cover = await this.querySelector(res, "img.blog-picture.tmdb-picture").getAttributeText("src");
-    const desc = await this.querySelector(res, "div.actor-element.tmdb-section-overview > p").text;
-    const urlPatterns = [/https?:\/\/[^\s'"]+\.(?:mp4|m3u8)/];
+    const titleEl = await this.querySelector(res, "div.float-video-title > h6, h1.entry-title, meta[property='og:title']");
+    const title = titleEl ? (await titleEl.text || await titleEl.getAttributeText("content")).trim() : "EroticMV Video";
+    const coverEl = await this.querySelector(res, "img.blog-picture.tmdb-picture, meta[property='og:image']");
+    const cover = coverEl ? (await coverEl.getAttributeText("src") || await coverEl.getAttributeText("content")) : "";
+    const descEl = await this.querySelector(res, "div.actor-element.tmdb-section-overview > p, meta[property='og:description']");
+    const desc = descEl ? (await descEl.text || await descEl.getAttributeText("content")).trim() : "EroticMV Video";
 
-    let episodeUrl = "";
+    const m3u8Match = res.match(/(https?:\/\/[^\s'"]+\.m3u8[^\s'"]*)/i) || res.match(/(https?:\/\/[^\s'"]+\.mp4[^\s'"]*)/i);
+    const iframeMatch = res.match(/<iframe[^>]+src=["']([^"']+)["']/i);
 
-    for (const pattern of urlPatterns) {
-      const match = res.match(pattern);
-      if (match) {
-        episodeUrl = match[0];
-        break;
-      }
-    }
+    let episodeUrl = m3u8Match ? m3u8Match[1] : (iframeMatch ? iframeMatch[1] : url);
 
     return {
-      title: title.trim(),
+      title,
       cover,
       desc,
       episodes: [
@@ -90,9 +95,35 @@ export default class extends Extension {
   }
 
   async watch(url) {
+    if (url.includes(".m3u8") || url.includes(".mp4")) {
+      return {
+        type: url.includes(".mp4") ? "mp4" : "hls",
+        url: url,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": "https://eroticmv.com/"
+        }
+      };
+    }
+
+    const res = await this.request("", {
+      headers: {
+        "Miru-Url": url,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://eroticmv.com/"
+      },
+    });
+
+    const m3u8Match = res.match(/(https?:\/\/[^\s'"]+\.m3u8[^\s'"]*)/i) || res.match(/(https?:\/\/[^\s'"]+\.mp4[^\s'"]*)/i);
+    const playUrl = m3u8Match ? m3u8Match[1] : url;
+
     return {
-      type: "hls",
-      url: url || "",
+      type: playUrl.includes(".mp4") ? "mp4" : "hls",
+      url: playUrl || "",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://eroticmv.com/"
+      }
     };
   }
 }

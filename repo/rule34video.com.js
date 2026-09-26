@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         Rule34Video
-// @version      v0.0.1
+// @version      v0.0.2
 // @author       jeylists
 // @lang         en
 // @license      MIT
@@ -15,13 +15,14 @@ export default class extends Extension {
 
   async req(url) {
     const res = await this.request("", {
-      "Miru-Url": url,
+      headers: {
+        "Miru-Url": url,
+      }
     });
-    return url;
+    return res;
   }
 
   async latest(page) {
-    // Latest updates
     const paddedPage = page.toString().padStart(2, "0");
     const url = `/latest-updates/?mode=async&function=get_block&block_id=custom_list_videos_latest_videos_list&sort_by=post_date&from=${paddedPage}`;
     const res = await this.request(url);
@@ -33,15 +34,14 @@ export default class extends Extension {
         const title = await this.getAttributeText(rawHtml,".th.js-open-popup","title");
         const url = await this.getAttributeText(rawHtml,".th.js-open-popup","href");
         const cover = await this.getAttributeText(rawHtml,".img.wrap_image .thumb","data-original");
-    
-        // Regular expression to extract the "added" string (update time)
+
         const updateRegex = /<div class="added">[\s\S]*?<\/svg>\s*(\d+\s\w+\s\w+)/;
         const updateMatch = rawHtml.match(updateRegex);
         const update = updateMatch ? updateMatch[1].trim() : null;
-    
+
         if (title && url && cover) {
             videos.push({
-                title: title,
+                title: title.trim(),
                 url: url,
                 cover: cover,
                 update: update,
@@ -53,7 +53,6 @@ export default class extends Extension {
   }
 
   async search(kw, page) {
-    // Search
     const paddedPage = page.toString().padStart(2, "0");
     const url = `/search/?mode=async&function=get_block&block_id=custom_list_videos_videos_list_search&q=${kw}&sort_by=&from_videos=${paddedPage}&from_albums=${paddedPage}`;
     const res = await this.request(url);
@@ -65,15 +64,14 @@ export default class extends Extension {
       const title = await this.getAttributeText(rawHtml,".th.js-open-popup","title");
       const url = await this.getAttributeText(rawHtml,".th.js-open-popup","href");
       const cover = await this.getAttributeText(rawHtml,".img.wrap_image .thumb","data-original");
-  
-      // Regular expression to extract the "added" string (update time)
+
       const updateRegex = /<div class="added">[\s\S]*?<\/svg>\s*(\d+\s\w+\s\w+)/;
       const updateMatch = rawHtml.match(updateRegex);
       const update = updateMatch ? updateMatch[1].trim() : null;
-  
+
       if (title && url && cover) {
           videos.push({
-              title: title,
+              title: title.trim(),
               url: url,
               cover: cover,
               update: update,
@@ -84,31 +82,44 @@ export default class extends Extension {
   }
 
   async detail(url) {
-    // Details
-    const strippedpath = url.replace(/^(https?:\/\/)?([^\/]+)(\/.*)?/, '$3');
+    const strippedpath = url.replace(/^(https?:\/\/)?([^\/]+)(\/.*)?/, '$3') || url;
     const res = await this.request(strippedpath);
-    const jsonLdScript = await this.querySelectorAll(res,'script[type="application/ld+json"]');
 
-    // Parse the JSON-LD content
-    const jsonRegex = /<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/;
-    const match = jsonLdScript[0].content.match(jsonRegex);
-    const jsonLdContent = JSON.parse(match[1]);
+    let title = "Rule34Video";
+    let cover = "";
+    let desc = "";
+    let contentUrl = "";
 
-    // Extract the title
-    const title = jsonLdContent.name;
-    const cover = jsonLdContent.thumbnailUrl;
-    const desc = jsonLdContent.description;
+    const jsonLdScript = await this.querySelectorAll(res, 'script[type="application/ld+json"]');
+    if (jsonLdScript && jsonLdScript.length > 0) {
+      try {
+        const jsonRegex = /<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/;
+        const match = jsonLdScript[0].content.match(jsonRegex);
+        if (match) {
+          const jsonLdContent = JSON.parse(match[1]);
+          title = jsonLdContent.name || title;
+          cover = jsonLdContent.thumbnailUrl || cover;
+          desc = jsonLdContent.description || desc;
+          contentUrl = jsonLdContent.contentUrl || "";
+        }
+      } catch (e) {}
+    }
+
+    if (!contentUrl) {
+      const videoMatch = res.match(/(https?:\/\/[^\s'"]+\.(?:mp4|m3u8)[^\s'"]*)/i);
+      contentUrl = videoMatch ? videoMatch[1] : url;
+    }
 
     return {
       title: title.trim(),
       cover: cover,
-      desc,
+      desc: desc,
       episodes: [
         {
-          title: title,
+          title: "Directory",
           urls: [{
-            name: title,
-            url: url,
+            name: title.trim(),
+            url: contentUrl,
           }]
         },
       ],
@@ -116,26 +127,47 @@ export default class extends Extension {
   }
 
   async watch(url) {
-    // Watch
-    const strippedpath = url.replace(/^(https?:\/\/)?([^\/]+)(\/.*)?/, '$3');
+    if (url.includes(".mp4") || url.includes(".m3u8")) {
+      return {
+        type: url.includes(".mp4") ? "mp4" : "hls",
+        url: url,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": "https://rule34video.com/"
+        }
+      };
+    }
+
+    const strippedpath = url.replace(/^(https?:\/\/)?([^\/]+)(\/.*)?/, '$3') || url;
     const res = await this.request(strippedpath);
-    const jsonLdScript = await this.querySelectorAll(res,'script[type="application/ld+json"]');
 
-    // Parse the JSON-LD content
-    const jsonRegex = /<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/;
-    const match = jsonLdScript[0].content.match(jsonRegex);
-    const jsonLdContent = JSON.parse(match[1]);
+    let contentUrl = "";
+    const jsonLdScript = await this.querySelectorAll(res, 'script[type="application/ld+json"]');
+    if (jsonLdScript && jsonLdScript.length > 0) {
+      try {
+        const jsonRegex = /<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/;
+        const match = jsonLdScript[0].content.match(jsonRegex);
+        if (match) {
+          const jsonLdContent = JSON.parse(match[1]);
+          contentUrl = jsonLdContent.contentUrl || "";
+        }
+      } catch (e) {}
+    }
 
-    // Extract the contentUrl
-    const contentUrl = jsonLdContent.contentUrl;
+    if (!contentUrl) {
+      const videoMatch = res.match(/(https?:\/\/[^\s'"]+\.(?:mp4|m3u8)[^\s'"]*)/i);
+      contentUrl = videoMatch ? videoMatch[1] : url;
+    }
 
-    // Determine type based on the file extension (mp4/hls)
     const type = contentUrl.endsWith(".mp4") ? "mp4" : "hls";
 
-    // Return the BangumiWatch object
     return {
       type,
-      url: contentUrl,
+      url: contentUrl || "",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://rule34video.com/"
+      }
     };
   }
 }
