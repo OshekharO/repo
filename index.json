@@ -633,11 +633,10 @@
   "lang": "all",
   "license": "MIT",
   "name": "IPTV-ORG",
-  "nsfw": "false",
   "package": "iptv-org",
   "type": "bangumi",
   "url": "iptv-org.js",
-  "version": "v0.0.1",
+  "version": "v0.0.2",
   "webSite": "https://iptv-org.github.io/iptv"
  },
  {
