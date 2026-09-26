@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         xHamster
-// @version      v0.0.2
+// @version      v0.0.3
 // @author       bachig26
 // @lang         en
 // @license      MIT
@@ -12,19 +12,50 @@
 // ==/MiruExtension==
 
 export default class extends Extension {
+  async request(url, options = {}) {
+    try {
+      let res = await super.request(url, options);
+
+      if (
+        typeof res === "string" &&
+        (res.includes("Just a moment...") ||
+          res.includes("cf-mitigation") ||
+          res.includes("Attention Required! | Cloudflare") ||
+          res.includes("Enable JavaScript and cookies to continue") ||
+          res.includes("Cloudflare"))
+      ) {
+        const targetUrl = options?.headers?.["Miru-Url"] || (url.startsWith("http") ? url : `https://xhamster.com${url.startsWith("/") ? "" : "/"}${url}`);
+        await this.openWebView(targetUrl);
+        res = await super.request(url, options);
+      }
+
+      return res;
+    } catch (e) {
+      const targetUrl = options?.headers?.["Miru-Url"] || (url.startsWith("http") ? url : `https://xhamster.com${url.startsWith("/") ? "" : "/"}${url}`);
+      await this.openWebView(targetUrl);
+      return await super.request(url, options);
+    }
+  }
+
   async latest(page) {
     const res = await this.request(`/newest/${page}`);
-    const bsxList = await this.querySelectorAll(res, "div.thumb-list__item.video-thumb");
+    const bsxList = await this.querySelectorAll(res, "div.thumb-list__item.video-thumb, div.video-thumb");
     const novel = [];
     for (const element of bsxList) {
       const html = await element.content;
-      const url = await this.getAttributeText(html, "a.video-thumb__image-container.role-pop", "href");
-      const titleEl = await this.querySelector(html, "a.root-9d8b4.primary-9d8b4.video-thumb-info__name, a[data-qa='video-title']");
-      const title = titleEl ? (await titleEl.text).trim() : "xHamster Video";
-      const cover = await this.getAttributeText(html, "img.thumb-image-container__image", "src");
-      if (url) {
+      const url = await this.getAttributeText(html, "a.video-thumb__image-container.role-pop, a[data-qa='video-title'], a.video-thumb__image-container", "href") || await this.getAttributeText(html, "a", "href");
+
+      const titleEl = await this.querySelector(html, "a[data-qa='video-title'], a.video-thumb-info__name, a.root-9d8b4.primary-9d8b4.video-thumb-info__name");
+      let title = titleEl ? (await titleEl.text).trim() : "";
+      if (!title) {
+        title = await this.getAttributeText(html, "img", "alt") || await this.getAttributeText(html, "a[data-qa='video-title']", "title") || "xHamster Video";
+      }
+
+      const cover = await this.getAttributeText(html, "img.thumb-image-container__image", "src") || await this.getAttributeText(html, "img", "src") || await this.getAttributeText(html, "img", "data-src");
+
+      if (url && (url.includes("/videos/") || url.includes("xhamster"))) {
         novel.push({
-          title,
+          title: title.trim(),
           url,
           cover: cover || "",
         });
@@ -36,18 +67,24 @@ export default class extends Extension {
   async search(kw) {
     const kwstring = kw.replace(/ /g, '+');
     const res = await this.request(`/search/${kwstring}`);
-    const bsxList = await this.querySelectorAll(res, "div.thumb-list__item.video-thumb");
+    const bsxList = await this.querySelectorAll(res, "div.thumb-list__item.video-thumb, div.video-thumb");
     const novel = [];
 
     for (const element of bsxList) {
       const html = await element.content;
-      const url = await this.getAttributeText(html, "a.video-thumb__image-container.role-pop", "href");
-      const titleEl = await this.querySelector(html, "a.root-9d8b4.primary-9d8b4.video-thumb-info__name, a[data-qa='video-title']");
-      const title = titleEl ? (await titleEl.text).trim() : "xHamster Video";
-      const cover = await this.getAttributeText(html, "img.thumb-image-container__image", "src");
-      if (url) {
+      const url = await this.getAttributeText(html, "a.video-thumb__image-container.role-pop, a[data-qa='video-title'], a.video-thumb__image-container", "href") || await this.getAttributeText(html, "a", "href");
+
+      const titleEl = await this.querySelector(html, "a[data-qa='video-title'], a.video-thumb-info__name, a.root-9d8b4.primary-9d8b4.video-thumb-info__name");
+      let title = titleEl ? (await titleEl.text).trim() : "";
+      if (!title) {
+        title = await this.getAttributeText(html, "img", "alt") || await this.getAttributeText(html, "a[data-qa='video-title']", "title") || "xHamster Video";
+      }
+
+      const cover = await this.getAttributeText(html, "img.thumb-image-container__image", "src") || await this.getAttributeText(html, "img", "src") || await this.getAttributeText(html, "img", "data-src");
+
+      if (url && (url.includes("/videos/") || url.includes("xhamster"))) {
         novel.push({
-          title,
+          title: title.trim(),
           url,
           cover: cover || "",
         });
@@ -64,8 +101,8 @@ export default class extends Extension {
       },
     });
 	  
-    const titleEl = await this.querySelector(res, "meta[property='og:title']");
-    const title = titleEl ? await titleEl.getAttributeText("content") : "xHamster Video";
+    const titleEl = await this.querySelector(res, "meta[property='og:title'], h1");
+    const title = titleEl ? (await titleEl.getAttributeText("content") || await titleEl.text).trim() : "xHamster Video";
     const coverEl = await this.querySelector(res, "meta[property='og:image']");
     const cover = coverEl ? await coverEl.getAttributeText("content") : "";
 
