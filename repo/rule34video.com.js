@@ -1,6 +1,6 @@
 // ==MiruExtension==
 // @name         Rule34Video
-// @version      v0.0.2
+// @version      v0.0.3
 // @author       jeylists
 // @lang         en
 // @license      MIT
@@ -22,18 +22,19 @@ export default class extends Extension {
     return res;
   }
 
-  async latest(page) {
-    const paddedPage = page.toString().padStart(2, "0");
+  async latest(page = 1) {
+    const pageNum = page || 1;
+    const paddedPage = pageNum.toString().padStart(2, "0");
     const url = `/latest-updates/?mode=async&function=get_block&block_id=custom_list_videos_latest_videos_list&sort_by=post_date&from=${paddedPage}`;
     const res = await this.request(url);
-    const videoList = await this.querySelectorAll(res, "#custom_list_videos_latest_videos_list_items .item.thumb");
+    const videoList = await this.querySelectorAll(res, "#custom_list_videos_latest_videos_list_items .item.thumb, .item.thumb, div.item");
     const videos = [];
 
     for (const element of videoList) {
         const rawHtml = await element.content;
-        const title = await this.getAttributeText(rawHtml,".th.js-open-popup","title");
-        const url = await this.getAttributeText(rawHtml,".th.js-open-popup","href");
-        const cover = await this.getAttributeText(rawHtml,".img.wrap_image .thumb","data-original");
+        const title = await this.getAttributeText(rawHtml, ".th.js-open-popup, a.th, a", "title") || await this.getAttributeText(rawHtml, "img", "alt");
+        const url = await this.getAttributeText(rawHtml, ".th.js-open-popup, a.th, a", "href");
+        const cover = await this.getAttributeText(rawHtml, ".img.wrap_image .thumb, img.thumb, img", "data-original") || await this.getAttributeText(rawHtml, "img", "src");
 
         const updateRegex = /<div class="added">[\s\S]*?<\/svg>\s*(\d+\s\w+\s\w+)/;
         const updateMatch = rawHtml.match(updateRegex);
@@ -52,18 +53,27 @@ export default class extends Extension {
     return videos;
   }
 
-  async search(kw, page) {
-    const paddedPage = page.toString().padStart(2, "0");
-    const url = `/search/?mode=async&function=get_block&block_id=custom_list_videos_videos_list_search&q=${kw}&sort_by=&from_videos=${paddedPage}&from_albums=${paddedPage}`;
-    const res = await this.request(url);
-    const videoList = await this.querySelectorAll(res, "#custom_list_videos_videos_list_search_items .item.thumb");
+  async search(kw, page = 1) {
+    const pageNum = page || 1;
+    const paddedPage = pageNum.toString().padStart(2, "0");
+    const encodedKw = encodeURIComponent(kw);
+    const url = `/search/${encodedKw}/?mode=async&function=get_block&block_id=custom_list_videos_videos_list_search&q=${encodedKw}&sort_by=&from_videos=${paddedPage}&from_albums=${paddedPage}`;
+    let res = await this.request(url);
+
+    let videoList = await this.querySelectorAll(res, "#custom_list_videos_videos_list_search_items .item.thumb, .item.thumb, div.item");
+    if (!videoList || videoList.length === 0) {
+      const fallbackUrl = `/search/${encodedKw}/`;
+      res = await this.request(fallbackUrl);
+      videoList = await this.querySelectorAll(res, "#custom_list_videos_videos_list_search_items .item.thumb, .item.thumb, div.item");
+    }
+
     const videos = [];
 
     for (const element of videoList) {
       const rawHtml = await element.content;
-      const title = await this.getAttributeText(rawHtml,".th.js-open-popup","title");
-      const url = await this.getAttributeText(rawHtml,".th.js-open-popup","href");
-      const cover = await this.getAttributeText(rawHtml,".img.wrap_image .thumb","data-original");
+      const title = await this.getAttributeText(rawHtml, ".th.js-open-popup, a.th, a", "title") || await this.getAttributeText(rawHtml, "img", "alt");
+      const url = await this.getAttributeText(rawHtml, ".th.js-open-popup, a.th, a", "href");
+      const cover = await this.getAttributeText(rawHtml, ".img.wrap_image .thumb, img.thumb, img", "data-original") || await this.getAttributeText(rawHtml, "img", "src");
 
       const updateRegex = /<div class="added">[\s\S]*?<\/svg>\s*(\d+\s\w+\s\w+)/;
       const updateMatch = rawHtml.match(updateRegex);

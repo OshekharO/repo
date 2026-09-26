@@ -33,31 +33,6 @@ export default class extends Extension {
     return clean;
   }
 
-  async request(url, options = {}) {
-    try {
-      let res = await super.request(url, options);
-
-      if (
-        typeof res === "string" &&
-        (res.includes("Just a moment...") ||
-          res.includes("cf-mitigation") ||
-          res.includes("Attention Required! | Cloudflare") ||
-          res.includes("Enable JavaScript and cookies to continue") ||
-          res.includes("Cloudflare"))
-      ) {
-        const targetUrl = options?.headers?.["Miru-Url"] || (url.startsWith("http") ? url : `https://eroticmv.com${url.startsWith("/") ? "" : "/"}${url}`);
-        await this.openWebView(targetUrl);
-        res = await super.request(url, options);
-      }
-
-      return res;
-    } catch (e) {
-      const targetUrl = options?.headers?.["Miru-Url"] || (url.startsWith("http") ? url : `https://eroticmv.com${url.startsWith("/") ? "" : "/"}${url}`);
-      await this.openWebView(targetUrl);
-      return await super.request(url, options);
-    }
-  }
-
   async latest(page) {
     const res = await this.request(`/page/${page}/`);
     const bsxList = await this.querySelectorAll(res, "article.float-video-box, article.post, div.video-item, div.col-md-4, article");

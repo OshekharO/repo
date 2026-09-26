@@ -12,31 +12,6 @@
 // ==/MiruExtension==
 
 export default class extends Extension {
-  async request(url, options = {}) {
-    try {
-      let res = await super.request(url, options);
-
-      if (
-        typeof res === "string" &&
-        (res.includes("Just a moment...") ||
-          res.includes("cf-mitigation") ||
-          res.includes("Attention Required! | Cloudflare") ||
-          res.includes("Enable JavaScript and cookies to continue") ||
-          res.includes("Cloudflare"))
-      ) {
-        const targetUrl = options?.headers?.["Miru-Url"] || (url.startsWith("http") ? url : `https://www.xnxx.com${url.startsWith("/") ? "" : "/"}${url}`);
-        await this.openWebView(targetUrl);
-        res = await super.request(url, options);
-      }
-
-      return res;
-    } catch (e) {
-      const targetUrl = options?.headers?.["Miru-Url"] || (url.startsWith("http") ? url : `https://www.xnxx.com${url.startsWith("/") ? "" : "/"}${url}`);
-      await this.openWebView(targetUrl);
-      return await super.request(url, options);
-    }
-  }
-
   async latest(page) {
     const res = await this.request(`/best/${page}`);
     const bsxList = await this.querySelectorAll(res, "div.thumb-block, div.mozaique > div");
@@ -51,9 +26,10 @@ export default class extends Extension {
       }
       const cover = await this.getAttributeText(html, "img", "data-src") || await this.getAttributeText(html, "img", "src");
       if (url && (url.includes("/video-") || url.includes("xnxx.com"))) {
+        const fullUrl = url.startsWith("http") ? url : `https://www.xnxx.com${url.startsWith("/") ? "" : "/"}${url}`;
         novel.push({
           title,
-          url,
+          url: fullUrl,
           cover: cover || "",
         });
       }
@@ -77,9 +53,10 @@ export default class extends Extension {
       }
       const cover = await this.getAttributeText(html, "img", "data-src") || await this.getAttributeText(html, "img", "src");
       if (url && (url.includes("/video-") || url.includes("xnxx.com"))) {
+        const fullUrl = url.startsWith("http") ? url : `https://www.xnxx.com${url.startsWith("/") ? "" : "/"}${url}`;
         novel.push({
           title,
-          url,
+          url: fullUrl,
           cover: cover || "",
         });
       }
@@ -88,9 +65,10 @@ export default class extends Extension {
   }
 
   async detail(url) {
+    const fullUrl = url.startsWith("http") ? url : `https://www.xnxx.com${url.startsWith("/") ? "" : "/"}${url}`;
     const res = await this.request("", {
       headers: {
-        "Miru-Url": url,
+        "Miru-Url": fullUrl,
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
@@ -120,7 +98,7 @@ export default class extends Extension {
     }
 
     if (!episodeUrl) {
-      episodeUrl = url;
+      episodeUrl = fullUrl;
     }
 
     return {
@@ -153,16 +131,17 @@ export default class extends Extension {
       };
     }
 
+    const fullUrl = url.startsWith("http") ? url : `https://www.xnxx.com${url.startsWith("/") ? "" : "/"}${url}`;
     const res = await this.request("", {
       headers: {
-        "Miru-Url": url,
+        "Miru-Url": fullUrl,
         "referer": "https://www.xnxx.com/",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
 
     const m3u8Match = res.match(/html5player\.setVideoHLS\(['"]([^"']+)['"]\)/i) || res.match(/(https?:\/\/[^\s'"]+\.(?:m3u8|mp4)[^\s'"]*)/i);
-    const playUrl = m3u8Match ? m3u8Match[1] : url;
+    const playUrl = m3u8Match ? m3u8Match[1] : fullUrl;
 
     return {
       type: playUrl.includes(".mp4") ? "mp4" : "hls",
