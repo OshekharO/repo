@@ -66,6 +66,45 @@ export default class extends Extension {
   async detail(url) {
     const videoId = url.replace(/.*(?:v=|\/)([\w-]{11}).*/, "$1");
 
+    try {
+      const omniRes = await this.request("", {
+        headers: {
+          "Miru-Url": `https://omni-api-mocha.vercel.app/api/youtube/download?url=https://m.youtube.com/watch?v=${videoId}`
+        }
+      });
+
+      if (omniRes?.code === "0000" && omniRes?.data?.medias?.length > 0) {
+        const data = omniRes.data;
+        const title = data.title || videoId;
+        const cover = data.imageUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+        const desc = `Duration: ${data.duration || 'N/A'}`;
+
+        const streamUrls = data.medias
+          .filter(m => m.url)
+          .map(m => ({
+            name: m.format || "Stream",
+            url: m.url
+          }));
+
+        if (streamUrls.length > 0) {
+          return {
+            title,
+            cover,
+            desc,
+            episodes: [
+              {
+                title: "Video Streams",
+                urls: streamUrls
+              }
+            ]
+          };
+        }
+      }
+    } catch (e) {
+      console.log("Omni API error, falling back to InnerTube:", e);
+    }
+
+    // Fallback to InnerTube API
     const res = await this.request("", {
       headers: {
         "Miru-Url": "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
